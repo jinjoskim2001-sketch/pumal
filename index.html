@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>품알</title>
+<meta name="description" content="품에 안고 키우는 포켓 가상 펫. 홈 화면에 추가하면 앱처럼 쓸 수 있어요.">
+<meta name="theme-color" content="#101114">
+<meta name="color-scheme" content="dark">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="품알">
+<meta name="format-detection" content="telephone=no">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://jinjoskim2001-sketch.github.io/pumal/">
+<meta property="og:title" content="품알 — 품에 안고 키우는 포켓 펫">
+<meta property="og:description" content="알에서 깨어나 내 돌봄대로 자라는 도트 펫. 링크를 열고 홈 화면에 추가하면 끝!">
+<meta property="og:image" content="https://jinjoskim2001-sketch.github.io/pumal/icons/og-800x400.png?v=1">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/sheets.css">
+<link rel="stylesheet" href="css/gate.css">
+</head>
+<body>
+<script>
+// The installed app is laid out from 100vh, a browser tab from the dynamic viewport
+// (css/app.css, --vh). CSS sees the installed app through the display-mode media feature;
+// this adds the older iOS signal so that app can never be mistaken for a tab.
+if (navigator.standalone === true) document.documentElement.setAttribute('data-display', 'standalone');
+</script>
+<div id="stage">
+  <header id="chrome">
+    <button id="btnDex" class="chip" aria-label="도감">
+      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 1h12v2H2zM1 2h2v12H1zM13 2h2v12h-2zM2 13h12v2H2zM5 3h1v10H5zM8 6h3v3H8z"/></svg>
+      <span aria-hidden="true">도감</span>
+    </button>
+    <span id="brand">품알</span>
+    <button id="btnSettings" class="chip" aria-label="설정">
+      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M1 4h14v2H1zM4 2h3v6H4zM1 11h14v2H1zM9 9h3v6H9z"/></svg>
+      <span aria-hidden="true">설정</span>
+    </button>
+  </header>
+
+  <main id="device" data-skin="milk">
+    <div class="halo" aria-hidden="true"></div>
+
+    <!-- The body of the toy. Purely decorative; nothing in here takes input. -->
+    <div class="shell" aria-hidden="true">
+      <!-- Arranged internals, shown only by the translucent colourways. Coordinates are tenths
+           of --u measured from the bottom of the shell, where the keys are anchored too. -->
+      <div class="internals">
+        <div class="chassis"></div>
+        <svg class="innards" viewBox="0 0 370 300" preserveAspectRatio="xMidYMax meet" focusable="false">
+          <defs>
+            <radialGradient id="pmSteel" cx="36%" cy="28%" r="85%">
+              <stop offset="0" stop-color="#F4F6F8"/><stop offset="0.5" stop-color="#B9BEC6"/><stop offset="1" stop-color="#737984"/>
+            </radialGradient>
+            <radialGradient id="pmBlob" cx="38%" cy="30%" r="80%">
+              <stop offset="0" stop-color="#55575D"/><stop offset="0.42" stop-color="#17181A"/><stop offset="1" stop-color="#050506"/>
+            </radialGradient>
+            <linearGradient id="pmBoard" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#2B8A5C"/><stop offset="0.5" stop-color="#1F6F4A"/><stop offset="1" stop-color="#165437"/>
+            </linearGradient>
+          </defs>
+
+          <!-- circuit board -->
+          <path d="M40 40H330a18 18 0 0 1 18 18V190a100 100 0 0 1-100 100H122A100 100 0 0 1 22 190V58a18 18 0 0 1 18-18z" fill="url(#pmBoard)" stroke="#4DB886" stroke-opacity="0.6" stroke-width="1.2"/>
+
+          <!-- flex ribbon running up to the LCD module, and its socket -->
+          <rect x="214" y="-12" width="42" height="60" fill="#D8923A"/>
+          <path d="M220-12V46M226-12V46M232-12V46M238-12V46M244-12V46M250-12V46" fill="none" stroke="#8E5A1C" stroke-width="1.4"/>
+          <rect x="208" y="44" width="54" height="13" rx="2" fill="#141517"/>
+          <path d="M214 57v5M220 57v5M226 57v5M232 57v5M238 57v5M244 57v5M250 57v5M256 57v5" fill="none" stroke="#E8BC66" stroke-width="2.6"/>
+
+          <!-- traces: three from key A (they pass under the cell), two from key C, short feeds
+               from the cell, a guard line each side -->
+          <g fill="none" stroke="#56C292" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+            <path d="M72 134V104L104 72H220V62"/>
+            <path d="M84 132V100L104 80H232V62"/>
+            <path d="M96 134V104L112 88H244V62"/>
+            <path d="M286 132V96L256 66V62"/>
+            <path d="M274 134V100L250 76V62"/>
+            <path d="M177 156V142M193 156V142"/>
+            <path d="M32 204V122L44 110V66"/>
+            <path d="M338 204V122L326 110V66"/>
+            <path d="M100 256V240L92 232V224"/>
+            <path d="M112 256V246H140L150 238"/>
+            <path d="M270 250L286 234V224"/>
+            <path d="M247 260H236L226 250V242"/>
+            <path d="M278 270H312"/>
+          </g>
+
+          <!-- vias and test pads -->
+          <g fill="#E8BC66">
+            <circle cx="32" cy="204" r="3.2"/><circle cx="44" cy="66" r="3.2"/><circle cx="338" cy="204" r="3.2"/><circle cx="326" cy="66" r="3.2"/>
+            <circle cx="292" cy="270" r="3.4"/><circle cx="302" cy="270" r="3.4"/><circle cx="312" cy="270" r="3.4"/>
+          </g>
+          <g fill="#14422C">
+            <circle cx="32" cy="204" r="1.2"/><circle cx="44" cy="66" r="1.2"/><circle cx="338" cy="204" r="1.2"/><circle cx="326" cy="66" r="1.2"/>
+          </g>
+
+          <!-- contact rings under the three keys -->
+          <g fill="none" stroke="#DDA654" stroke-width="3">
+            <circle cx="84" cy="178" r="46"/><circle cx="185" cy="205" r="51"/><circle cx="286" cy="178" r="46"/>
+          </g>
+
+          <!-- coin cell in its clip -->
+          <rect x="222" y="92" width="20" height="16" rx="3" fill="#8D939D"/>
+          <rect x="128" y="92" width="20" height="16" rx="3" fill="#8D939D"/>
+          <circle cx="185" cy="100" r="44" fill="url(#pmSteel)"/>
+          <circle cx="185" cy="100" r="43.2" fill="none" stroke="#5E646E" stroke-width="1.6"/>
+          <circle cx="185" cy="100" r="35" fill="none" stroke="#FFFFFF" stroke-opacity="0.4" stroke-width="1"/>
+          <path d="M175 100h20M185 90v20" fill="none" stroke="#6C727C" stroke-width="3.2" stroke-linecap="round"/>
+
+          <!-- clock crystal and two capacitors -->
+          <rect x="92" y="256" width="28" height="10" rx="5" fill="url(#pmSteel)"/>
+          <rect x="130" y="254" width="9" height="5" rx="1" fill="#C9A66B"/>
+          <rect x="130" y="263" width="9" height="5" rx="1" fill="#C9A66B"/>
+
+          <!-- the chip, under its drop of epoxy -->
+          <circle cx="262" cy="264" r="16" fill="url(#pmBlob)"/>
+
+          <!-- case screws -->
+          <g transform="translate(48 242)"><circle r="7" fill="url(#pmSteel)"/><circle r="6.4" fill="none" stroke="#4F545D" stroke-width="1"/><path d="M-4 0h8M0-4v8" stroke="#4F545D" stroke-width="1.7"/></g>
+          <g transform="translate(322 242) rotate(28)"><circle r="7" fill="url(#pmSteel)"/><circle r="6.4" fill="none" stroke="#4F545D" stroke-width="1"/><path d="M-4 0h8M0-4v8" stroke="#4F545D" stroke-width="1.7"/></g>
+
+          <!-- silk-screen -->
+          <text x="236" y="126">BT1</text>
+          <text x="92" y="279">X1</text>
+          <text x="284" y="288">U1</text>
+          <text x="185" y="292" text-anchor="middle">PM-01</text>
+        </svg>
+      </div>
+      <div class="sheen"></div>
+      <div class="gloss"></div>
+    </div>
+
+    <div class="lcd-fit" data-lcd-fit>
+      <div class="plate">
+        <div id="bezel"><canvas id="lcd" role="img" aria-label="품알 화면"></canvas><div id="glass"><i class="glare"></i></div></div>
+        <p id="caption" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <div class="badge" aria-hidden="true">
+      <span class="wordmark"><i class="led"></i>품알</span>
+      <span class="speaker"><i class="piezo"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    </div>
+
+    <div id="keys">
+      <div class="key" id="keyA" role="button" tabindex="0" aria-label="A 고르기">
+        <span class="key-well" aria-hidden="true"></span><span class="key-shadow" aria-hidden="true"></span><span class="key-wall" aria-hidden="true"></span>
+        <span class="key-cap" aria-hidden="true"><svg viewBox="0 0 5 7" focusable="false"><path d="M1 0h3v1H1zM0 1h1v6H0zM4 1h1v6H4zM1 3h3v1H1z"/></svg></span>
+        <span class="key-label" aria-hidden="true">고르기</span>
+      </div>
+      <div class="key" id="keyB" role="button" tabindex="0" aria-label="B 결정">
+        <span class="key-well" aria-hidden="true"></span><span class="key-shadow" aria-hidden="true"></span><span class="key-wall" aria-hidden="true"></span>
+        <span class="key-cap" aria-hidden="true"><svg viewBox="0 0 5 7" focusable="false"><path d="M0 0h4v1H0zM0 1h1v6H0zM4 1h1v2H4zM1 3h3v1H1zM4 4h1v2H4zM1 6h3v1H1z"/></svg></span>
+        <span class="key-label" aria-hidden="true">결정</span>
+      </div>
+      <div class="key" id="keyC" role="button" tabindex="0" aria-label="C 취소">
+        <span class="key-well" aria-hidden="true"></span><span class="key-shadow" aria-hidden="true"></span><span class="key-wall" aria-hidden="true"></span>
+        <span class="key-cap" aria-hidden="true"><svg viewBox="0 0 5 7" focusable="false"><path d="M1 0h4v1H1zM0 1h1v5H0zM1 6h4v1H1z"/></svg></span>
+        <span class="key-label" aria-hidden="true">취소</span>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="sheetRoot"></div>
+<div id="gateRoot"></div>
+<div id="toastRoot"></div>
+
+<script>
+// Shell feel: key press look, glare that follows the pointer, pinch guards.
+// Inline and classic on purpose: the toy must answer a touch in the same frame, even while
+// the game modules are still loading. It only toggles classes and transforms; what a key
+// DOES is wired in js/main.js.
+(function () {
+  var device = document.getElementById('device');
+  if (!device) return;
+
+  // --- keys: down within the frame of the touch, held long enough to be seen ---
+  var keys = Array.prototype.slice.call(device.querySelectorAll('.key'));
+  var MIN_PRESS_MS = 90;
+
+  function release(key) {
+    key._pid = null;
+    clearTimeout(key._timer);
+    var wait = MIN_PRESS_MS - (performance.now() - (key._t || 0));
+    if (wait > 0) {
+      key._timer = setTimeout(function () { key.classList.remove('is-pressed'); }, wait);
+    } else {
+      key.classList.remove('is-pressed');
+    }
+  }
+
+  keys.forEach(function (key) {
+    key.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      clearTimeout(key._timer);
+      key._pid = e.pointerId;
+      key._t = performance.now();
+      key.classList.add('is-pressed');
+    }, { passive: true });
+  });
+
+  function onPointerEnd(e) {
+    keys.forEach(function (key) {
+      if (key._pid === e.pointerId) release(key);
+    });
+  }
+
+  function releaseAll() {
+    keys.forEach(function (key) {
+      if (key._pid != null) release(key);
+    });
+  }
+
+  window.addEventListener('pointerup', onPointerEnd, { passive: true });
+  window.addEventListener('pointercancel', onPointerEnd, { passive: true });
+  window.addEventListener('blur', releaseAll);
+  document.addEventListener('visibilitychange', releaseAll);
+
+  // --- glare: the reflections drift a few px toward the finger, low-pass filtered ---
+  var glare = device.querySelector('.glare');
+  var sheen = device.querySelector('.sheen');
+  var calm = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var box = null;
+  var tx = 0, ty = 0, x = 0, y = 0, raf = 0;
+
+  function paint() {
+    if (glare) glare.style.transform = 'translate3d(' + (x * 10).toFixed(2) + 'px,' + (y * 8).toFixed(2) + 'px,0)';
+    if (sheen) sheen.style.transform = 'translate3d(' + (x * 7).toFixed(2) + 'px,' + (y * 6).toFixed(2) + 'px,0)';
+  }
+
+  function step() {
+    x += (tx - x) * 0.14;
+    y += (ty - y) * 0.14;
+    var settled = Math.abs(tx - x) < 0.004 && Math.abs(ty - y) < 0.004;
+    if (settled) { x = tx; y = ty; }
+    paint();
+    raf = settled ? 0 : requestAnimationFrame(step);
+  }
+
+  function aim(e) {
+    if (calm.matches) return;
+    if (!box) box = device.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+    tx = Math.max(-1, Math.min(1, ((e.clientX - box.left) / box.width) * 2 - 1));
+    ty = Math.max(-1, Math.min(1, ((e.clientY - box.top) / box.height) * 2 - 1));
+    if (!raf) raf = requestAnimationFrame(step);
+  }
+
+  function rest() {
+    tx = 0; ty = 0;
+    if (calm.matches) { x = 0; y = 0; paint(); return; }
+    if (!raf) raf = requestAnimationFrame(step);
+  }
+
+  window.addEventListener('pointermove', aim, { passive: true });
+  window.addEventListener('pointerdown', aim, { passive: true });
+  window.addEventListener('pointerup', function (e) { if (e.pointerType !== 'mouse') rest(); }, { passive: true });
+  window.addEventListener('pointercancel', rest, { passive: true });
+  document.documentElement.addEventListener('mouseleave', rest);
+  window.addEventListener('resize', function () { box = null; });
+  if (calm.addEventListener) calm.addEventListener('change', rest);
+
+  // --- guards: Safari ignores user-scalable=no in a tab, so stop the pinch by hand ---
+  function block(e) { e.preventDefault(); }
+  document.addEventListener('gesturestart', block, { passive: false });
+  document.addEventListener('gesturechange', block, { passive: false });
+  var stage = document.getElementById('stage');
+  if (stage) stage.addEventListener('contextmenu', block);
+  // an (empty) touchstart listener is what makes :active styles apply on iOS
+  document.addEventListener('touchstart', function () {}, { passive: true });
+})();
+</script>
+<script type="module" src="js/main.js"></script>
+<script>
+// Load watchdog. The game, the install guide and every message live behind js/main.js and
+// its imports. If one of those files cannot be fetched, nothing ever runs and the page would
+// stay a toy with a blank screen and dead keys, with no way to reload in the installed app.
+// - `error` on the script element fires when main.js or any module it imports fails to load.
+// - A request that just hangs fires nothing, so a timer covers it. That notice goes away by
+//   itself if the modules do arrive (`load` fires once main.js has run).
+// This script runs while the page is still being parsed, before either event can fire.
+(function () {
+  var script = document.querySelector('script[type="module"][src="js/main.js"]');
+  var root = document.getElementById('gateRoot');
+  if (!script || !root) return;
+  var SLOW_MS = 12000;
+  var notice = null;
+
+  function hide() {
+    if (notice && notice.parentNode) notice.parentNode.removeChild(notice);
+    notice = null;
+  }
+
+  function show(failed) {
+    hide();
+    notice = document.createElement('section');
+    notice.className = 'gate gate--notice';
+    notice.setAttribute('role', 'alert');
+    notice.innerHTML =
+      '<div class="gate__inner"><header class="gate__head">' +
+      '<p class="gate__headline">' + (failed ? '불러오지 못했어요' : '불러오는 중이에요') + '</p>' +
+      '<p class="gate__lead">' + (failed
+        ? '연결을 확인하고<br>다시 시도해 주세요.'
+        : '연결이 느린 것 같아요.<br>조금 더 기다리거나 다시 시도해 주세요.') + '</p>' +
+      '</header><button type="button" class="gate-btn gate-btn--primary">다시 시도</button></div>';
+    notice.querySelector('button').addEventListener('click', function () { location.reload(); });
+    root.appendChild(notice);
+    // Also on the toy itself, in case the notice cannot be drawn.
+    var caption = document.getElementById('caption');
+    if (failed && caption && !caption.textContent) caption.textContent = '불러오지 못했어요';
+  }
+
+  var timer = setTimeout(function () { show(false); }, SLOW_MS);
+  script.addEventListener('load', function () { clearTimeout(timer); hide(); });
+  script.addEventListener('error', function () { clearTimeout(timer); show(true); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,953 @@
+/* Gate screens: the install guide (iOS Safari tab) and the in-app-browser escape.
+   Mounted into #gateRoot by js/install.js. Every token has a literal fallback because this
+   sheet must render correctly even if css/app.css failed to load. */
+
+#gateRoot,
+.gate-pill {
+  --gate-bg: var(--page-bg, #101114);
+  --gate-ink: var(--ui-ink, #f3efe4);
+  --gate-soft: #cfcbbf;
+  --gate-dim: #a8a59b;
+  --gate-faint: #8c897f;
+  --gate-yolk: var(--ui-yolk, #ffc83d);
+  --gate-yolk-deep: #c9971a;
+  --gate-bezel: #2b2b2e;
+  --gate-pea: #c5cfa4;
+  --gate-lcd-ink: #1e2a1c;
+  --gate-card: rgba(255, 255, 255, 0.045);
+  --gate-line: var(--ui-line, rgba(255, 255, 255, 0.085));
+  --gate-tile: #1b1c21;
+  --gate-pixel: var(--font-pixel, 'NeoDunggeunmo', ui-rounded, 'Apple SD Gothic Neo', system-ui, sans-serif);
+  --gate-sans: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', system-ui, sans-serif;
+  --gate-ease: var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+#gateRoot:empty {
+  display: none;
+}
+
+/* Opaque and full-bleed: iOS samples the bar tint from whatever fixed element touches the
+   top edge, so this layer must be the page colour, never transparent. */
+#gateRoot:not(:empty) {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--gate-bg);
+  color: var(--gate-ink);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.gate {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  min-height: 100%;
+  padding: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px))
+    max(14px, env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
+  font-family: var(--gate-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* A low lamp behind the plate so the dark page has depth without a second colour. */
+.gate::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 340px;
+  background: radial-gradient(58% 62% at 50% 26%, rgba(255, 200, 61, 0.11), rgba(255, 200, 61, 0) 72%);
+  pointer-events: none;
+}
+
+.gate *,
+.gate *::before,
+.gate *::after {
+  box-sizing: border-box;
+}
+
+/* margin:auto (not justify-content) keeps the top reachable when the content is taller
+   than the viewport. */
+.gate__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 400px;
+  margin: auto;
+}
+
+/* ---- head: plate, wordmark, one sentence ---- */
+
+.gate__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin: 0;
+}
+
+.gate__plate {
+  margin-bottom: 14px;
+}
+
+.gate__word {
+  margin: 0;
+  font-family: var(--gate-pixel);
+  font-size: 48px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  /* letter-spacing trails the last glyph; pull it back so the word stays optically centred */
+  margin-right: -0.06em;
+  color: var(--gate-ink);
+}
+
+.gate__headline {
+  margin: 14px 0 0;
+  font-family: var(--gate-pixel);
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--gate-ink);
+}
+
+.gate__lead {
+  max-width: 21em;
+  margin: 12px 0 0;
+  font-family: var(--gate-pixel);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--gate-soft);
+  text-wrap: balance;
+}
+
+.gate__headline + .gate__lead {
+  margin-top: 8px;
+  color: var(--gate-dim);
+}
+
+/* ---- the app icon: yolk field, dark bezel, pea LCD. Same picture as icons/*.png ---- */
+
+.gate-icon {
+  --s: 88px;
+  position: relative;
+  display: block;
+  flex: none;
+  width: var(--s);
+  height: var(--s);
+  padding: calc(var(--s) * 0.125);
+  border-radius: calc(var(--s) * 0.225);
+  background: linear-gradient(160deg, #ffd766 0%, var(--gate-yolk) 46%, #f4b523 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(140, 92, 0, 0.28),
+    0 14px 34px -10px rgba(255, 200, 61, 0.32),
+    0 6px 14px rgba(0, 0, 0, 0.45);
+}
+
+.gate-icon__bezel {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: calc(var(--s) * 0.065);
+  border-radius: calc(var(--s) * 0.15);
+  background: var(--gate-bezel);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.gate-lcd {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 3%;
+  border-radius: calc(var(--s) * 0.085);
+  background: var(--gate-pea);
+  overflow: hidden;
+}
+
+/* glass: vignette plus one diagonal glare */
+.gate-lcd::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(118deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 36%);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.32),
+    inset 0 0 10px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+}
+
+.gate-lcd__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: var(--gate-lcd-ink);
+  shape-rendering: geometricPrecision;
+}
+
+.gate-lcd__ghost {
+  opacity: 0.09;
+}
+
+.gate-lcd__shadow {
+  opacity: 0.22;
+}
+
+.gate-lcd__lit {
+  opacity: 0.92;
+}
+
+/* The idle flip is a discrete two-frame swap at 2 fps, like everything inside the glass. */
+.gate-lcd__frame--0 {
+  animation: gate-flip-a 1s steps(1, end) infinite;
+}
+
+.gate-lcd__frame--1 {
+  animation: gate-flip-b 1s steps(1, end) infinite;
+}
+
+@keyframes gate-flip-a {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes gate-flip-b {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+.gate-icon--mini {
+  --s: 40px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+.gate-icon--tiny {
+  --s: 18px;
+  box-shadow: none;
+}
+
+.gate-icon--mini .gate-lcd::after,
+.gate-icon--tiny .gate-lcd::after {
+  box-shadow: none;
+}
+
+.gate-icon--mini .gate-lcd__ghost,
+.gate-icon--tiny .gate-lcd__ghost {
+  opacity: 0;
+}
+
+/* ---- steps ---- */
+
+.gate__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gate-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid var(--gate-line);
+  border-radius: 18px;
+  background: var(--gate-card);
+}
+
+.gate-step__num {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--gate-yolk);
+  color: var(--gate-bezel);
+  font-family: var(--gate-pixel);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.gate-step__text h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 5px;
+  font-family: var(--gate-pixel);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--gate-ink);
+}
+
+.gate-step__text p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--gate-dim);
+}
+
+.gate-step__text b {
+  font-weight: 600;
+  color: var(--gate-ink);
+}
+
+.gate-step__text .gate-step__note {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--gate-faint);
+}
+
+.gate-step__text .gate-step__note b {
+  color: var(--gate-soft);
+}
+
+/* ---- illustrations: small drawings of the browser chrome, not screenshots ---- */
+
+.gate-art {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+  width: 126px;
+  height: 84px;
+  padding: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 13px;
+  background: var(--gate-tile);
+  color: rgba(243, 239, 228, 0.5);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  overflow: hidden;
+}
+
+.gate-g {
+  display: block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.gate-art__bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gate-art__btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gate-art__btn .gate-g {
+  width: 13px;
+  height: 13px;
+}
+
+.gate-art__btn--hot {
+  background: var(--gate-yolk);
+  color: var(--gate-bezel);
+  box-shadow: 0 0 0 3px rgba(255, 200, 61, 0.22);
+}
+
+.gate-art__btn--hot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--gate-yolk);
+  opacity: 0;
+  animation: gate-ping 2.2s var(--gate-ease) infinite;
+}
+
+@keyframes gate-ping {
+  0% { opacity: 0.7; transform: scale(1); }
+  70%, 100% { opacity: 0; transform: scale(1.75); }
+}
+
+.gate-art__addr {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gate-art__addr i {
+  display: block;
+  width: 70%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Safari 27+: the way in is a press on the address bar itself, so the bar is what is lit
+   and a fingertip rests on it. */
+.gate-art__addr--hot {
+  position: relative;
+  background: rgba(255, 200, 61, 0.14);
+  box-shadow:
+    inset 0 0 0 1.5px var(--gate-yolk),
+    0 0 0 3px rgba(255, 200, 61, 0.2);
+}
+
+/* the address text runs under the fingertip, so the lit bar cannot be read as a switch */
+.gate-art__addr--hot i {
+  width: 100%;
+  background: rgba(255, 200, 61, 0.38);
+}
+
+.gate-art__addr--hot::before,
+.gate-art__addr--hot::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+}
+
+.gate-art__addr--hot::before {
+  background: var(--gate-yolk);
+  box-shadow: 0 0 0 2.5px var(--gate-tile);
+}
+
+.gate-art__addr--hot::after {
+  border: 1.5px solid var(--gate-yolk);
+  opacity: 0;
+  animation: gate-ping 2.2s var(--gate-ease) infinite;
+}
+
+.gate-art__pop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  align-self: flex-end;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 0 8px 0 9px;
+  border: 1px solid rgba(255, 200, 61, 0.65);
+  border-radius: 9px;
+  background: rgba(255, 200, 61, 0.12);
+  color: var(--gate-ink);
+  white-space: nowrap;
+}
+
+.gate-art__pop .gate-g {
+  color: var(--gate-yolk);
+}
+
+.gate-art--top {
+  justify-content: flex-start;
+}
+
+/* the Share row opens over the address bar, not over the right-hand button */
+.gate-art--hold .gate-art__pop {
+  align-self: center;
+}
+
+/* list / confirm rows */
+
+.gate-art--list,
+.gate-art--confirm {
+  justify-content: center;
+}
+
+.gate-art__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex: none;
+  height: 20px;
+  padding: 0 7px 0 8px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.gate-art__row i {
+  display: block;
+  width: 52%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.gate-art__row i.gate-art__short {
+  width: 36%;
+}
+
+.gate-art__row b {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.gate-art__row--hot {
+  height: 26px;
+  border: 1px solid rgba(255, 200, 61, 0.65);
+  background: rgba(255, 200, 61, 0.12);
+  color: var(--gate-ink);
+}
+
+.gate-art__row--hot .gate-g {
+  color: var(--gate-yolk);
+}
+
+.gate-art__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  height: 20px;
+}
+
+.gate-art__cancel {
+  display: block;
+  width: 22px;
+  height: 4px;
+  margin-left: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.gate-art__add {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 20px;
+  padding: 0 9px;
+  border-radius: 10px;
+  background: var(--gate-yolk);
+  color: var(--gate-bezel);
+  font-weight: 700;
+  box-shadow: 0 0 0 3px rgba(255, 200, 61, 0.2);
+}
+
+.gate-art__app {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 20px;
+  padding-left: 2px;
+  color: rgba(243, 239, 228, 0.72);
+}
+
+.gate-art__row--switch {
+  height: 24px;
+  padding-right: 5px;
+  color: var(--gate-ink);
+}
+
+.gate-art__switch {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 26px;
+  height: 16px;
+  border-radius: 8px;
+  background: #34c759;
+}
+
+.gate-art__switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* ---- closing line ---- */
+
+.gate__final {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+}
+
+.gate__final-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+  font-family: var(--gate-pixel);
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--gate-ink);
+  text-align: left;
+}
+
+/* for the icon that was added with "Open as Web App" switched off and lands here again */
+.gate__final-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--gate-faint);
+  text-align: center;
+}
+
+.gate__final-note b {
+  font-weight: 600;
+  color: var(--gate-soft);
+}
+
+/* ---- buttons ---- */
+
+.gate-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  margin: 0;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 16px;
+  font-family: var(--gate-pixel);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+  transition: transform 90ms var(--gate-ease), box-shadow 90ms var(--gate-ease);
+}
+
+.gate-btn .gate-g {
+  width: 16px;
+  height: 16px;
+}
+
+/* The primary button borrows the key feel of the device: a lip that collapses on press. */
+.gate-btn--primary {
+  min-height: 58px;
+  margin-top: 4px;
+  background: linear-gradient(180deg, #ffd45f, var(--gate-yolk) 60%);
+  color: var(--gate-bezel);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.6),
+    0 4px 0 var(--gate-yolk-deep),
+    0 14px 26px -8px rgba(255, 200, 61, 0.35);
+}
+
+.gate-btn--primary:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.6),
+    0 1px 0 var(--gate-yolk-deep),
+    0 6px 14px -8px rgba(255, 200, 61, 0.3);
+}
+
+.gate-btn--ghost {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--gate-ink);
+}
+
+.gate-btn--ghost:active {
+  transform: scale(0.97);
+}
+
+.gate-btn:focus-visible,
+.gate__quiet:focus-visible,
+.gate-pill:focus-visible {
+  outline: 2px solid var(--gate-yolk);
+  outline-offset: 3px;
+}
+
+/* ---- copy the address ---- */
+
+.gate-copy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 5px 5px 0;
+  border: 1px solid var(--gate-line);
+  border-radius: 16px;
+  background: var(--gate-card);
+}
+
+.gate-copy__url {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  padding: 0 4px 0 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--gate-dim);
+  font-family: var(--gate-sans);
+  /* 16px minimum: anything smaller makes iOS zoom the page on focus */
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-user-select: text;
+  user-select: text;
+  outline: none;
+}
+
+.gate-copy__hint {
+  min-height: 18px;
+  margin: -8px 0 0;
+  font-size: 12px;
+  color: var(--gate-yolk);
+  text-align: center;
+}
+
+.gate-copy__hint:empty {
+  display: none;
+}
+
+/* ---- foot ---- */
+
+.gate__foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: -4px;
+  text-align: center;
+}
+
+.gate__quiet {
+  min-height: 44px;
+  margin: 0;
+  padding: 0 18px;
+  border: 0;
+  background: none;
+  color: var(--gate-soft);
+  font-family: var(--gate-pixel);
+  font-size: 16px;
+  line-height: 1;
+  text-decoration: underline;
+  text-decoration-color: rgba(207, 203, 191, 0.4);
+  text-underline-offset: 5px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+}
+
+.gate__quiet:active {
+  color: var(--gate-ink);
+}
+
+.gate__warn {
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--gate-faint);
+}
+
+.gate__warn b {
+  font-weight: 600;
+  color: var(--gate-soft);
+}
+
+/* ---- load notice (index.html): the modules could not be fetched, or are taking long ---- */
+
+.gate--notice .gate__inner {
+  gap: 22px;
+  max-width: 340px;
+}
+
+.gate--notice .gate__headline {
+  margin-top: 0;
+}
+
+/* ---- Android install pill (optional, js/install.js mountInstallPill) ---- */
+
+.gate-pill {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 55;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--gate-yolk);
+  color: var(--gate-bezel);
+  font-family: var(--gate-pixel);
+  font-size: 16px;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+}
+
+.gate-pill[hidden] {
+  display: none;
+}
+
+/* ---- entrance: one calm rise, staggered ---- */
+
+@keyframes gate-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.gate__inner > * {
+  animation: gate-rise 420ms var(--gate-ease) both;
+}
+
+.gate__inner > :nth-child(2) { animation-delay: 40ms; }
+.gate__inner > :nth-child(3) { animation-delay: 80ms; }
+.gate__inner > :nth-child(4) { animation-delay: 120ms; }
+.gate__inner > :nth-child(n + 5) { animation-delay: 160ms; }
+
+@media (hover: hover) and (pointer: fine) {
+  .gate-btn--ghost:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  .gate__quiet:hover {
+    color: var(--gate-ink);
+  }
+}
+
+/* ---- short screens (iPhone SE, Safari tab with both bars showing) ---- */
+
+@media (max-height: 740px) {
+  .gate__inner {
+    gap: 8px;
+  }
+
+  .gate-icon--hero {
+    --s: 56px;
+  }
+
+  .gate__plate {
+    margin-bottom: 8px;
+  }
+
+  .gate__word {
+    font-size: 32px;
+  }
+
+  .gate__lead {
+    margin-top: 8px;
+  }
+
+  .gate__steps {
+    gap: 5px;
+    margin-top: 2px;
+  }
+
+  .gate-step {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .gate-art {
+    height: 78px;
+  }
+
+  .gate-icon--mini {
+    --s: 34px;
+  }
+
+  .gate__final {
+    gap: 4px;
+    margin-top: 2px;
+  }
+}
+
+/* ---- narrow phones: give the words the room, shrink the drawing ---- */
+
+@media (max-width: 359px) {
+  .gate-art {
+    width: 112px;
+  }
+
+  .gate__headline {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .gate__headline br {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gate__inner > * {
+    animation: gate-fade 150ms linear both;
+    animation-delay: 0ms;
+  }
+
+  .gate-art__btn--hot::after,
+  .gate-art__addr--hot::after {
+    animation: none;
+  }
+
+  .gate-btn {
+    transition: none;
+  }
+}
+
+@keyframes gate-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

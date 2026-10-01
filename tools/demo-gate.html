@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>품알 gate harness</title>
+<meta name="theme-color" content="#101114">
+<meta name="color-scheme" content="dark">
+<!--
+  Mounts one gate screen with a faked environment so it can be looked at on a desktop.
+    ?mode=install
+    ?mode=install&safari=27          (Safari major version: 26 = ··· button, 27 = hold the address bar;
+                                      without it the version is unknown and both ways are shown)
+    ?mode=install&browser=other      (iOS browser that is not Safari)
+    &ingame=1                        (the guide as opened from 설정 over a running game)
+    ?mode=escape&app=kakaotalk       (line | instagram | threads | facebook | naver | daum | other)
+    ?mode=pill                       (Android install pill)
+    ?mode=sw                         (register ../sw.js and list what it precached; real browser only)
+    &frame=390x844                   (true phone-size viewport, see below)
+    &audit=1                         (print tap-target heights and overflow checks)
+    &click=play|copy|open            (press that control once)
+  Add &bare=1 to skip css/app.css and see the gate with its own fallbacks only.
+  The automatic KakaoTalk / LINE hand-off is always off here.
+-->
+<style>
+  /* Same face css/app.css loads; repeated so the harness shows the real type on its own. */
+  @font-face {
+    font-family: 'NeoDunggeunmo';
+    src: url('https://cdn.jsdelivr.net/gh/neodgm/neodgm-webfont@1.601/neodgm/neodgm.woff2') format('woff2');
+    font-display: swap;
+  }
+  html, body { margin: 0; background: #101114; }
+</style>
+<link rel="stylesheet" href="../css/gate.css">
+</head>
+<body>
+<div id="gateRoot"></div>
+<script type="module">
+  import { mountGate, mountInstallPill } from '../js/install.js';
+
+  const q = new URLSearchParams(location.search);
+
+  // Headless Chrome will not lay a window out narrower than 500 px, so a "390 wide"
+  // screenshot is really a crop of a 500 px layout. ?frame=390x844 puts the same harness
+  // in an iframe of exactly that size at the top-left corner, which gives true phone
+  // metrics (and true media queries) inside the crop.
+  const frame = /^(\d+)x(\d+)$/.exec(q.get('frame') || '');
+  if (frame) {
+    q.delete('frame');
+    const el = document.createElement('iframe');
+    el.src = `${location.pathname}?${q}`;
+    el.style.cssText = `position:fixed;left:0;top:0;border:0;width:${frame[1]}px;height:${frame[2]}px;`;
+    document.body.replaceChildren(el);
+    throw new Error('framed'); // stop this module; the iframe runs the harness
+  }
+  if (q.has('probe')) {
+    document.body.insertAdjacentHTML('beforeend',
+      `<p style="position:fixed;z-index:99;left:4px;bottom:4px;margin:0;font:12px monospace;color:#0f0">${innerWidth}x${innerHeight} @${devicePixelRatio}</p>`);
+  }
+  if (!q.has('bare')) {
+    // Loaded before gate.css in the real page; order does not matter for these selectors.
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '../css/app.css';
+    document.head.prepend(link);
+  }
+
+  const mode = q.get('mode') || 'install';
+  const root = document.getElementById('gateRoot');
+  const log = (msg) => {
+    document.title = msg;
+    document.body.insertAdjacentHTML('beforeend',
+      `<p style="position:fixed;z-index:99;left:8px;top:8px;margin:0;font:12px monospace;color:#7dff8a">${msg} · gateRoot children: ${root.childElementCount}</p>`);
+  };
+
+  if (mode === 'sw') {
+    // Registers the real worker and prints what it cached. For a real browser window:
+    // tools/shot.sh runs on virtual time and takes its picture before the worker installs.
+    const out = document.createElement('pre');
+    out.style.cssText = 'margin:0;padding:16px;color:#cfcbbf;font:12px/1.5 ui-monospace,monospace;white-space:pre-wrap';
+    document.body.append(out);
+    const say = (line) => { out.textContent += `${line}\n`; };
+    try {
+      const reg = await navigator.serviceWorker.register('../sw.js', { updateViaCache: 'none' });
+      say(`registered, scope ${reg.scope}`);
+      await navigator.serviceWorker.ready;
+      say(`worker state: ${reg.active ? reg.active.state : 'not active'}`);
+      const names = await caches.keys();
+      for (const name of names) {
+        const keys = await (await caches.open(name)).keys();
+        say(`\n${name} (${keys.length})`);
+        keys.forEach((k) => say(`  ${k.url.replace(location.origin, '')}`));
+      }
+      const hit = await caches.match(new URL('../?play=1', location.href).href, { ignoreSearch: true });
+      say(`\n./?play=1 found in cache: ${Boolean(hit)}`);
+      say('\nTo remove: DevTools → Application → Service workers → Unregister');
+    } catch (err) {
+      say(`FAILED: ${err && err.message}`);
+    }
+  } else if (mode === 'pill') {
+    mountInstallPill(document.body);
+    const pill = document.querySelector('.gate-pill');
+    pill.hidden = false;
+  } else {
+    const env = {
+      standalone: false,
+      ios: true,
+      android: false,
+      safari: mode === 'install' && q.get('browser') !== 'other',
+      inApp: mode === 'escape' ? (q.get('app') || 'kakaotalk') : null,
+    };
+    const opts = { auto: false, inGame: q.get('ingame') === '1', onPlayHere: () => log('onPlayHere') };
+    if (/^\d+$/.test(q.get('safari') || '')) {
+      opts.ua = `Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/${q.get('safari')}.0 Mobile/15E148 Safari/604.1`;
+    } else if (env.safari) {
+      opts.ua = 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1';
+    }
+    mountGate(root, mode, env, opts);
+
+    // ?click=play|copy|open presses that control once, to see what the handlers do.
+    if (q.has('click')) {
+      const el = root.querySelector(`[data-gate-act="${q.get('click')}"]`);
+      if (el) {
+        if (q.get('click') === 'open') el.addEventListener('click', (e) => { e.preventDefault(); log(`open → ${el.getAttribute('href')}`); });
+        el.click();
+      }
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    }
+
+    // ?audit=1 prints the things a screenshot cannot prove: tap-target heights, clipped or
+    // off-screen elements, and whether the screen has to scroll.
+    if (q.has('audit')) {
+      await document.fonts.ready;
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const targets = [...root.querySelectorAll('a, button, input')];
+      const short = targets.filter((el) => el.getBoundingClientRect().height < 44);
+      const bad = [];
+      for (const el of root.querySelectorAll('.gate *')) {
+        if (el.closest('svg') || el.matches('.gate-copy__url')) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) continue;
+        // (.gate-art itself is skipped: the animated ring around the lit button is meant
+        // to be cut off by the tile edge and would read as clipping.)
+        const clipped = !el.matches('.gate-art') && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'visible';
+        const outside = r.left < -0.5 || r.right > innerWidth + 0.5;
+        // An illustration tile clips on purpose; its children must still fit inside it.
+        const art = el.closest('.gate-art');
+        const a = art && art !== el ? art.getBoundingClientRect() : null;
+        const spills = a && (r.left < a.left - 0.5 || r.right > a.right + 0.5 || r.top < a.top - 0.5 || r.bottom > a.bottom + 0.5);
+        if (clipped || outside || spills) bad.push(`${el.className || el.tagName}${clipped ? ' clipped' : ''}${outside ? ' outside' : ''}${spills ? ' spills' : ''}`);
+      }
+      const heights = targets.map((el) => `${el.tagName.toLowerCase()}:${Math.round(el.getBoundingClientRect().height)}`).join(' ');
+      const lines = [
+        `${innerWidth}x${innerHeight}  content ${root.scrollHeight}px ${root.scrollHeight > innerHeight ? '(scrolls)' : '(fits)'}`,
+        `targets ${heights}  under 44: ${short.length}`,
+        `overflow: ${bad.length ? bad.join(' | ') : 'none'}`,
+      ];
+      const panel = document.createElement('pre');
+      panel.textContent = lines.join('\n');
+      panel.style.cssText = 'position:fixed;z-index:99;left:0;right:0;bottom:0;margin:0;padding:6px 8px;background:rgba(0,0,0,.85);color:#7dff8a;font:10px/1.4 ui-monospace,monospace;white-space:pre-wrap';
+      document.body.append(panel);
+    }
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "품알",
+  "short_name": "품알",
+  "description": "품에 안고 키우는 포켓 가상 펫. 홈 화면에 추가하면 앱처럼 쓸 수 있어요.",
+  "lang": "ko",
+  "display": "standalone",
+  "start_url": "./",
+  "scope": "./",
+  "theme_color": "#101114",
+  "background_color": "#101114",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>frame</title>
+<!-- Dev tool for tools/shot.sh. Headless Chrome never lays a window out narrower than 500 CSS px,
+     so a "390 wide" screenshot of a page is really a 500-wide layout. This page hosts the target
+     in an iframe of exactly w x h in the top-left corner; inside it viewport units are true.
+     usage: tools/frame.html?w=390&h=844&src=<url-encoded path relative to the project root> -->
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  iframe { position: absolute; left: 0; top: 0; border: 0; background: #101114; }
+</style>
+</head>
+<body>
+<script>
+  const q = new URLSearchParams(location.search);
+  const frame = document.createElement('iframe');
+  frame.style.width = `${parseInt(q.get('w'), 10) || 390}px`;
+  frame.style.height = `${parseInt(q.get('h'), 10) || 844}px`;
+  frame.src = `../${q.get('src') || ''}`;
+  document.body.appendChild(frame);
+</script>
+</body>
+</html>

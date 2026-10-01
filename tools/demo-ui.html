@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>품알 sheets harness</title>
+<meta name="theme-color" content="#101114">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../css/app.css">
+<link rel="stylesheet" href="../css/sheets.css">
+<style>
+  /* harness-only read-outs, never part of the app */
+  #demoInfo {
+    position: absolute; left: 6px; bottom: 6px; z-index: 99; margin: 0; max-width: calc(100% - 12px);
+    font: 10px/1.35 ui-monospace, Menlo, monospace; color: #9fe8b0; white-space: pre-wrap;
+    background: rgba(0, 0, 0, 0.72); padding: 4px 6px; border-radius: 6px; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<!--
+  Throwaway harness for js/ui.js + css/sheets.css. It needs no js/main.js: the device body is
+  copied from ../index.html at load time and `app` is a mock built on the real engine and the
+  real storage codec, with a fake save (8 species met, two album entries, departReady true).
+  The 도감 / 설정 chips on the page open the sheets too, so it can be clicked through by hand.
+
+  Query:
+    sheet=dex|settings|name|confirm|postcard|about    sheet to open (none: just the device)
+    tab=album                 with sheet=dex: start on the 앨범 tab
+    first=1                   with sheet=name: the after-hatching variant
+    end=star                  with sheet=postcard: the memorial card (default: the journey card)
+    newegg=1                  with sheet=postcard: show the "새 알 맞이하기" button
+    danger=1                  with sheet=confirm: the destructive variant
+    empty=1                   brand-new save: empty 도감, empty 앨범
+    skin=milk|grape|graphite|ice|lagoon|sakura        prefs.skin (accent of the sheets)
+    tint=pea|warm|amber       prefs.tint (portraits)
+    mode=classic              start in 매운맛
+    do=classic|reset|reset2|export|import|badimport|about|rename|card|tour|submit|keys
+                              press something after the sheet is open:
+                              classic = the 매운맛 segment (→ confirm), reset = 처음부터 다시,
+                              reset2 = the second confirm, export / import = the save-code panels,
+                              badimport = import a broken code, about / rename = the stacked sheets,
+                              card = the first album card (→ postcard),
+                              tour = flip every control in 설정 once and log the app calls,
+                              submit = type a 7-character name and confirm (expects 6),
+                              keys = check that key presses do not leak to the page and Escape closes
+    scroll=600                scroll the sheet body by that many px (bottom = a large number)
+    drag=140                  hold the sheet dragged down by that many px (negative = pulled up);
+                              &via=body drags from the scrolling content (touch path) instead of
+                              the header (pointer path); &release=1 lets go after a moment
+    toast=...                 show a toast
+    close=1                   open, then close again (checks that nothing is left behind)
+    audit=1                   print overflow / tap-target / scroll checks (bottom-left read-out;
+                              numbers for a sheet stacked a moment ago can be mid-transition)
+    debug=1                   only show the log of app calls
+    vp=390x844                render inside an iframe of exactly this size (headless Chrome
+                              cannot lay out narrower than 500 px, so screenshots need this)
+-->
+<script type="module">
+import { initUI } from '../js/ui.js';
+import { newGame, act, view } from '../js/engine.js';
+import { exportCode, importCode, DEFAULT_PREFS } from '../js/storage.js';
+import { createLCD } from '../js/lcd.js';
+import { SPECIES_ART, ICONS } from '../js/sprites.js';
+
+const q = new URLSearchParams(location.search);
+const errors = [];
+addEventListener('error', (e) => errors.push(e.message || String(e)));
+addEventListener('unhandledrejection', (e) => errors.push(String(e.reason && e.reason.message || e.reason)));
+
+const vp = /^(\d+)x(\d+)$/.exec(q.get('vp') || '');
+if (vp) {
+  const inner = new URLSearchParams(q);
+  inner.delete('vp');
+  const frame = document.createElement('iframe');
+  frame.src = `${location.pathname}?${inner}`;
+  frame.style.cssText = `position:absolute;left:0;top:0;width:${vp[1]}px;height:${vp[2]}px;border:0;background:#101114`;
+  document.body.appendChild(frame);
+} else {
+  await main();
+}
+
+async function main() {
+  // ---- the real page body, so the sheets are seen over the real device ----
+  const html = await (await fetch('../index.html', { cache: 'no-store' })).text();
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  let shellScript = '';
+  for (const node of [...doc.body.children]) {
+    if (node.tagName === 'SCRIPT') {
+      if (!node.type && !node.src) shellScript = node.textContent;
+      continue;
+    }
+    document.body.appendChild(document.importNode(node, true));
+  }
+  if (shellScript) {
+    const s = document.createElement('script');
+    s.textContent = shellScript;
+    document.body.appendChild(s);
+  }
+
+  // ---- fake save ----
+  const DAY = 86400000;
+  const now = Date.now();
+  const state = newGame(now - 30 * DAY, { rulesMode: q.get('mode') === 'classic' ? 'classic' : 'gentle' });
+  state.lastTick = now;
+  const prefs = { ...DEFAULT_PREFS, skin: q.get('skin') || 'milk', tint: q.get('tint') || 'pea' };
+
+  if (q.get('empty') !== '1') {
+    Object.assign(state.pet, {
+      name: '콩이', gen: 3, species: 'banjjak', stage: 'adult', bornAt: now - 9 * DAY, ageDays: 9,
+      stageAwakeMin: 3000, adultAwakeMin: 3000, totalAwakeMin: 5300, hunger: 3, happy: 4, weight: 31,
+      discipline: 3, bond: 44, specialChecked: true, departReady: true, matureAnnounced: true,
+    });
+    state.dex = {
+      mongsil: now - 29 * DAY, tongtong: now - 29 * DAY, saessak: now - 28 * DAY, narae: now - 26 * DAY,
+      mallang: now - 19 * DAY, ppittak: now - 18 * DAY, dwinggul: now - 16 * DAY, banjjak: now - 6 * DAY,
+    };
+    state.album = [
+      { name: '보리', species: 'narae', gen: 1, ageDays: 9, bornAt: now - 29 * DAY, endedAt: now - 20 * DAY, end: 'journey', mode: 'gentle', careGrade: 'A' },
+      { name: '두부', species: 'dwinggul', gen: 2, ageDays: 8, bornAt: now - 19 * DAY, endedAt: now - 10 * DAY, end: 'star', cause: 'neglect', mode: 'classic', careGrade: 'C', leftEgg: false },
+    ];
+  }
+
+  // ---- LCD behind the sheets ----
+  const device = document.getElementById('device');
+  const lcd = createLCD(document.getElementById('lcd'));
+  const paint = () => {
+    device.dataset.skin = prefs.skin;
+    if (prefs.solid) device.dataset.solid = 'true'; else delete device.dataset.solid;
+    lcd.setTint(prefs.tint);
+    lcd.setBackdrop('day');
+    lcd.setIcons([ICONS.food, ICONS.play, ICONS.clean, ICONS.light], [ICONS.medicine, ICONS.scold, ICONS.status, ICONS.call]);
+    lcd.setIconState({ selected: -1, lit: [] });
+    lcd.clear();
+    const art = SPECIES_ART[app.view().species] || SPECIES_ART.egg;
+    lcd.sprite(art.idle[0], 16, 14);
+    lcd.snap();
+    document.getElementById('caption').textContent = `${app.view().name} · ${app.view().ageDays}살`;
+  };
+
+  // ---- mock app (SPEC 11.5 contract) ----
+  const calls = [];
+  const note = (text) => { calls.push(text); if (calls.length > (q.get('do') ? 14 : 4)) calls.shift(); report(); };
+  const app = {
+    state,
+    prefs,
+    view: () => view(app.state, Date.now()),
+    act: (action, payload) => {
+      const res = act(app.state, action, payload, Date.now(), {});
+      note(`act ${action} ${payload ? JSON.stringify(payload) : ''} → ${res.ok ? 'ok' : res.reason}`);
+      paint();
+      return res;
+    },
+    setPrefs: (patch) => { Object.assign(app.prefs, patch); note(`setPrefs ${JSON.stringify(patch)}`); paint(); },
+    exportCode: () => exportCode(app.state),
+    importCode: (text) => {
+      try {
+        app.state = importCode(text);
+        note('importCode → ok');
+        paint();
+        return { ok: true };
+      } catch (err) {
+        note(`importCode → ${err.message}`);
+        return { ok: false, error: err.message };
+      }
+    },
+    resetGame: () => { app.state = newGame(Date.now(), {}); note('resetGame'); paint(); },
+    share: async () => { note('share → copied'); return 'copied'; },
+    env: { standalone: true, ios: true, android: false, safari: true, inApp: null },
+    version: 'pumal-v1',
+  };
+
+  const info = document.createElement('pre');
+  info.id = 'demoInfo';
+  info.hidden = !q.has('audit') && !q.has('debug') && !q.has('drag') && !['tour', 'submit', 'keys'].includes(q.get('do'));
+  document.body.appendChild(info);
+  let auditText = '';
+  function report() {
+    info.textContent = [auditText, calls.join('\n'), errors.length ? `errors: ${errors.join(' | ')}` : ''].filter(Boolean).join('\n');
+  }
+
+  paint();
+  const ui = initUI(app);
+  window.__ui = ui;
+  window.__app = app;
+  document.getElementById('btnDex').addEventListener('click', () => ui.open('dex'));
+  document.getElementById('btnSettings').addEventListener('click', () => ui.open('settings'));
+
+  // ---- open what the query asks for ----
+  // Headless screenshots run on virtual time: timers race ahead of the compositor, so a fixed
+  // sleep can end while a transition is still mid-way. Sleep, then wait for whatever is
+  // still animating (the endless ones aside) to finish.
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const wait = async (ms) => {
+    await sleep(ms);
+    const running = document.getAnimations().filter((a) => a.effect && a.effect.getComputedTiming().iterations !== Infinity);
+    await Promise.race([Promise.all(running.map((a) => a.finished.catch(() => {}))), sleep(1500)]);
+  };
+  const topSheet = () => [...document.querySelectorAll('#sheetRoot .sheet-layer:not(.is-closing)')].pop();
+  const press = (el) => { if (el) el.click(); else errors.push('do: target not found'); };
+  const byText = (sel, text) => [...topSheet().querySelectorAll(sel)].find((n) => n.textContent.includes(text));
+
+  const sheet = q.get('sheet');
+  if (sheet === 'dex') ui.open('dex', { tab: q.get('tab') || 'dex' });
+  else if (sheet === 'settings') ui.open('settings');
+  else if (sheet === 'name') ui.open('name', { first: q.get('first') === '1', onDone: (name) => note(`name onDone ${name}`) });
+  else if (sheet === 'about') ui.open('about');
+  else if (sheet === 'postcard') {
+    const entry = q.get('end') === 'star' ? app.state.album[1] : app.state.album[0];
+    ui.open('postcard', { entry, newEgg: q.get('newegg') === '1' });
+  } else if (sheet === 'confirm') {
+    ui.open('confirm', q.get('danger') === '1' ? {
+      title: '정말 모두 지울까요?', body: '되돌릴 수 없어요. 남기고 싶다면 먼저 저장 코드를 내보내 주세요.',
+      confirmLabel: '모두 지우기', cancelLabel: '그만둘게요', danger: true,
+      onConfirm: () => note('confirm → yes'), onCancel: () => note('confirm → no'),
+    } : {
+      title: `${app.view().name}를 여행 보낼까요?`, body: '다 자란 펫은 넓은 세상을 보러 떠나요. 엽서와 새 알을 남겨 줄 거예요.',
+      confirmLabel: '보내 줄게요', cancelLabel: '조금 더 함께',
+      onConfirm: () => note('confirm → yes'), onCancel: () => note('confirm → no'),
+    });
+  }
+
+  if (sheet) await wait(600);
+
+  const todo = q.get('do');
+  if (todo === 'classic') press(byText('.seg-btn', '매운맛'));
+  if (todo === 'reset' || todo === 'reset2') {
+    press(byText('.row', '처음부터 다시'));
+    if (todo === 'reset2') { await wait(600); press(topSheet().querySelector('.btn-danger')); }
+  }
+  if (todo === 'export') press(byText('.row', '내보내기'));
+  if (todo === 'import' || todo === 'badimport') {
+    press(byText('.row', '가져오기'));
+    if (todo === 'badimport') {
+      await wait(100);
+      const box = topSheet().querySelector('textarea:not([readonly])');
+      box.value = 'PUMAL1.this-is-not-a-real-code';
+      press(byText('.btn', '가져오기'));
+      await wait(600);
+      press(topSheet().querySelector('.btn-danger'));
+    }
+  }
+  if (todo === 'about') press(byText('.row', '정보'));
+  if (todo === 'rename') press(byText('.row', '이름 바꾸기'));
+  if (todo === 'card') press(topSheet().querySelector('.album-card'));
+  if (todo === 'tour') {
+    const checked = (text) => byText('.row', text).getAttribute('aria-checked');
+    press(byText('.row', '소리'));
+    press(byText('.swatch', '포도'));
+    press(byText('.swatch', '호박'));
+    press(byText('.swatch', '도감 10종'));            // locked: must only toast
+    press(byText('.row', '투명 효과'));
+    const wake = topSheet().querySelector('input[type="time"]');
+    wake.value = '07:30';
+    wake.dispatchEvent(new Event('change', { bubbles: true }));
+    press(byText('.row', '돌보미'));
+    press(byText('.row', '친구에게'));
+    await wait(200);
+    note(`소리 ${checked('소리')} 투명 ${checked('투명 효과')} 돌보미 ${checked('돌보미')} accent ${document.getElementById('sheetRoot').dataset.skin} wake ${app.state.settings.wakeMin} paused ${app.state.paused}`);
+  }
+  if (todo === 'submit') {
+    const input = topSheet().querySelector('.name-input');
+    input.value = '보리보리보리보';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    note(`typed 7 → field holds "${input.value}" (${topSheet().querySelector('.name-count').textContent})`);
+    press(topSheet().querySelector('.btn-primary'));
+    await wait(500);
+    note(`pet name now ${app.view().name}, isOpen ${ui.isOpen()}`);
+  }
+  if (todo === 'keys') {
+    let leaked = 0;
+    const spy = () => { leaked += 1; };
+    document.addEventListener('keydown', spy);
+    window.addEventListener('keydown', spy);
+    for (const key of ['a', 's', 'd', 'Enter', ' ', 'ArrowLeft']) {
+      topSheet().querySelector('.sheet').dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    }
+    note(`6 key presses inside the sheet, ${leaked} reached the page`);
+    topSheet().querySelector('.sheet').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await wait(500);
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+    note(`after Escape: isOpen ${ui.isOpen()}, a key press now reaches the page ${leaked > 0}`);
+  }
+  if (todo) await wait(700);
+
+  if (q.has('scroll')) {
+    const body = topSheet().querySelector('.sheet-body');
+    body.scrollTop = Number(q.get('scroll'));
+    await wait(100);
+  }
+
+  if (q.has('drag')) {
+    const d = Number(q.get('drag'));
+    const step = Math.sign(d) * 5;
+    if (q.get('via') === 'body') {
+      // a finger on the content, pulled down from the top of the scroller (touch-event path)
+      const body = topSheet().querySelector('.sheet-body');
+      const r = body.getBoundingClientRect();
+      const x = r.left + 120, y = r.top + 90;
+      // like a real touch, every event of the gesture goes to the element it started on
+      const target = document.elementFromPoint(x, y) || body;
+      const fire = (type, dy, lifted) => {
+        const ev = new Event(type, { bubbles: true, cancelable: true });
+        ev.touches = lifted ? [] : [{ identifier: 3, clientX: x, clientY: y + dy }];
+        target.dispatchEvent(ev);
+        return ev;
+      };
+      fire('touchstart', 0);
+      const first = fire('touchmove', step);
+      fire('touchmove', step + d);
+      note(`body pull: first move claimed ${first.defaultPrevented}`);
+      if (q.get('release') === '1') { await sleep(400); fire('touchend', 0, true); await wait(600); }
+    } else {
+      // a finger on the header, moved and not yet lifted (pointer-event path)
+      const head = topSheet().querySelector('.sheet-head');
+      const r = head.getBoundingClientRect();
+      const x = r.left + 60, y = r.top + 12;
+      const fire = (type, dy) => head.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y + dy, button: 0 }));
+      fire('pointerdown', 0);
+      fire('pointermove', step);
+      fire('pointermove', step + d);
+      if (q.get('release') === '1') { await sleep(400); fire('pointerup', step + d); await wait(600); }
+    }
+    note(`after drag: isOpen ${ui.isOpen()}`);
+  }
+
+  if (q.get('toast')) {
+    // repeated, so a screenshot taken at any moment catches it
+    ui.toast(q.get('toast'));
+    setInterval(() => ui.toast(q.get('toast')), 1500);
+  }
+
+  if (q.get('close') === '1') {
+    ui.close();
+    await wait(700);
+    note(`after close: isOpen ${ui.isOpen()}, #sheetRoot children ${document.getElementById('sheetRoot').childElementCount}, stage inert ${document.getElementById('stage').inert}`);
+  }
+
+  // ---- audit: what a screenshot cannot prove ----
+  if (q.has('audit')) {
+    await document.fonts.ready;
+    await wait(100);
+    const layer = topSheet();
+    if (!layer) { auditText = `${innerWidth}x${innerHeight}  no sheet open`; report(); return; }
+    const sheetEl = layer.querySelector('.sheet');
+    const body = layer.querySelector('.sheet-body');
+    const s = sheetEl.getBoundingClientRect();
+    const b = body.getBoundingClientRect();
+    const outside = [], clipped = [], small = [];
+    for (const el of sheetEl.querySelectorAll('*')) {
+      if (el.closest('svg') && el.tagName !== 'svg') continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width && !r.height) continue;
+      const tag = `${el.tagName.toLowerCase()}.${String(el.className.baseVal ?? el.className).split(' ')[0]}`;
+      if (r.left < s.left - 0.5 || r.right > s.right + 0.5) outside.push(tag);
+      const cs = getComputedStyle(el);
+      // (.sr-only and .tint-frame clip on purpose)
+      if (el.scrollWidth > el.clientWidth + 1 && cs.overflowX !== 'visible' && el !== body && !el.matches('textarea, .sr-only, .tint-frame')) clipped.push(tag);
+      if (el.matches('button, input, textarea, [role="switch"], [role="radio"]')) {
+        // a target may be extended by a pseudo-element (segmented control), so measure the hit area
+        const hit = el.matches('.seg-btn') ? r.height + 8 : r.height;
+        if (hit < 43.5 || r.width < 43.5) small.push(`${tag} ${Math.round(r.width)}x${Math.round(hit)}`);
+      }
+    }
+    auditText = [
+      `${innerWidth}x${innerHeight} dpr ${devicePixelRatio}  sheet ${Math.round(s.width)}x${Math.round(s.height)} top ${Math.round(s.top)} bottom ${Math.round(s.bottom)}`,
+      `body ${Math.round(b.height)} / content ${body.scrollHeight} ${body.scrollHeight > body.clientHeight + 1 ? '(scrolls)' : '(fits)'}  scrollTop ${Math.round(body.scrollTop)}`,
+      `outside: ${outside.length ? [...new Set(outside)].join(' ') : 'none'}`,
+      `clipped: ${clipped.length ? [...new Set(clipped)].join(' ') : 'none'}`,
+      `targets under 44: ${small.length ? [...new Set(small)].join(' | ') : 'none'}`,
+      `layers ${document.getElementById('sheetRoot').childElementCount}  isOpen ${ui.isOpen()}  stage inert ${document.getElementById('stage').inert}`,
+    ].join('\n');
+  }
+  report();
+}
+</script>
+</body>
+</html>

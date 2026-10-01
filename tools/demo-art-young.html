@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>품알 art harness (young)</title>
+<meta name="color-scheme" content="dark">
+<!--
+  Art review harness for js/art/young.js on the real LCD renderer. Not shipped, not precached.
+    ?set=a        egg, mongsil, tongtong, mallang   (six frames per LCD: idle0 idle1 happy / upset eat sleep)
+    ?set=b        saessak, kkabul, ppittak
+    ?set=solo     idle[0] | idle[1] side by side over the day backdrop  (&part=2 for the teens)
+    &tint=warm    pea (default) | warm | amber | glow
+-->
+<style>
+  html, body { margin: 0; background: #101114; color: #9aa08a; font: 11px/1.3 ui-monospace, monospace; }
+  /* Left-aligned on purpose: headless Chrome lays out at 500px even for a 390px shot. */
+  .cell { width: 300px; margin: 6px 0 0 8px; }
+  .cell p { margin: 2px 0 0; text-align: center; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+import { createLCD } from '../js/lcd.js';
+import { YOUNG } from '../js/art/young.js';
+
+const q = new URLSearchParams(location.search);
+const set = q.get('set') || 'a';
+const tint = q.get('tint') || 'pea';
+const root = document.getElementById('root');
+
+function addLCD(parent, label) {
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  cell.setAttribute('data-lcd-fit', '');
+  const canvas = document.createElement('canvas');
+  const p = document.createElement('p');
+  p.textContent = label;
+  cell.append(canvas, p);
+  parent.append(cell);
+  const lcd = createLCD(canvas);
+  lcd.setTint(tint);
+  return lcd;
+}
+
+const framesOf = (name) => {
+  const a = YOUNG[name];
+  return name === 'egg'
+    ? [a.idle[0], a.idle[1], a.crack[0], a.crack[1], a.crack[2]]
+    : [a.idle[0], a.idle[1], a.happy, a.upset, a.eat, a.sleep];
+};
+
+if (set === 'solo') {
+  const all = Object.keys(YOUNG);
+  for (const name of q.get('part') === '2' ? all.slice(4) : all.slice(0, 4)) {
+    const lcd = addLCD(root, name);
+    lcd.setBackdrop('day');
+    lcd.clear();
+    lcd.sprite(YOUNG[name].idle[0], 6, 13);
+    lcd.sprite(YOUNG[name].idle[1], 27, 13);
+    lcd.snap();
+  }
+} else {
+  const names = set === 'b' ? ['saessak', 'kkabul', 'ppittak'] : ['egg', 'mongsil', 'tongtong', 'mallang'];
+  for (const name of names) {
+    const lcd = addLCD(root, name);
+    lcd.clear();
+    framesOf(name).forEach((bmp, i) => lcd.sprite(bmp, (i % 3) * 16, Math.floor(i / 3) * 16));
+    lcd.snap();
+  }
+}
+</script>
+</body>
+</html>

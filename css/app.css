@@ -1,0 +1,1043 @@
+/* 품알 — tokens, page, device, bezel, keys, chrome, colourways, toast.
+   Two clocks that never mix: the LCD canvas is discrete and low-fps, everything in this file
+   is the smooth shell around it. Only transform and opacity are ever animated here. */
+
+/* ---------- font ---------- */
+
+/* Unmodified upstream file, so the reserved font name may be kept (SIL OFL 1.1).
+   swap: a first offline launch must show text at once in the fallback stack. */
+@font-face {
+  font-family: 'NeoDunggeunmo';
+  src: url('https://cdn.jsdelivr.net/gh/neodgm/neodgm-webfont@1.601/neodgm/neodgm.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------- tokens ---------- */
+
+:root {
+  --page-bg: #101114;
+  --font-pixel: 'NeoDunggeunmo', ui-rounded, 'Apple SD Gothic Neo', system-ui, sans-serif;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /* overshooting bezier for browsers without linear(); replaced by real springs below */
+  --ease-spring: cubic-bezier(0.3, 1.5, 0.5, 1);
+  --ease-spring-soft: cubic-bezier(0.3, 1.3, 0.5, 1);
+  --t-press: 90ms;
+  --t-release: 280ms;
+  --t-in: 220ms;
+  --t-out: 140ms;
+
+  /* neutral UI palette for everything that sits on the dark page (chrome, toast, sheets, gate) */
+  --ui-ink: #F1EEE6;
+  --ui-ink-dim: rgba(241, 238, 230, 0.66);
+  --ui-ink-faint: rgba(241, 238, 230, 0.4);
+  --ui-surface: #1B1D22;
+  --ui-surface-2: #262930;
+  --ui-line: rgba(255, 255, 255, 0.09);
+  --ui-yolk: #FFC83D;
+  --ui-danger: #FF6B57;
+
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+
+  /* The height of the page. Installed app: 100vh, not dvh or %: with the translucent status
+     bar those leave a gap at the bottom on a cold start. A browser tab is overridden below. */
+  --vh: 100vh;
+
+  /* The one unit everything on the device is built from. The page is 39u wide (37u device
+     + 1u air each side) and needs 69u of height (chrome row, device, margins), so the device
+     scales from whichever dimension runs out first. */
+  --u: min(
+    calc((100vw - var(--sal) - var(--sar)) / 39),
+    calc((var(--vh) - var(--sat) - var(--sab)) / 69)
+  );
+}
+
+/* In a browser tab (the trial game) 100vh is the tall viewport, the one with Safari's bars
+   retracted. This page never scrolls, so they never retract and the bottom of the toy, B key
+   first, would sit under the toolbar. The dynamic viewport is the part that is really
+   visible. Standalone is recognised twice over (the media feature, and navigator.standalone
+   through the attribute index.html sets) so the installed app can never land here. */
+@supports (height: 100dvh) {
+  @media not all and (display-mode: standalone) {
+    :root:not([data-display='standalone']) {
+      --vh: 100dvh;
+    }
+  }
+}
+
+/* Damped springs sampled into linear(): zeta 0.5 for keys, 0.62 for calmer surfaces. */
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: linear(0, 0.083, 0.279, 0.517, 0.745, 0.931, 1.061, 1.136, 1.162, 1.154, 1.125, 1.087, 1.049, 1.017, 0.994, 0.98, 0.974, 0.974, 0.978, 0.984, 0.991, 0.996, 1, 1.003, 1);
+    --ease-spring-soft: linear(0, 0.064, 0.214, 0.4, 0.586, 0.749, 0.88, 0.975, 1.037, 1.07, 1.083, 1.081, 1.07, 1.055, 1.039, 1.025, 1.013, 1.004, 0.998, 0.995, 0.993, 0.993, 1);
+  }
+}
+
+/* ---------- page ---------- */
+
+html,
+body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: var(--vh);
+  margin: 0;
+  overflow: hidden;
+  /* clip (unlike hidden) also refuses programmatic scrolling, e.g. scrollIntoView when an
+     input inside a sheet takes focus, which would otherwise shove the whole toy sideways. */
+  overflow: clip;
+  /* Always dark: the status-bar text is white (black-translucent), and iOS samples this
+     colour for the bar when it finds no fixed element at the top edge. */
+  background: var(--page-bg);
+}
+
+body {
+  color: var(--ui-ink);
+  font-family: var(--font-pixel);
+  font-size: 16px;
+  line-height: 1.5;
+  font-synthesis: none;            /* the pixel face has one weight; never fake bold or italic */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+
+#stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--vh);
+  box-sizing: border-box;
+  padding:
+    calc(var(--sat) + var(--u) * 0.8)
+    var(--sar)
+    calc(var(--sab) + var(--u) * 1.2)
+    var(--sal);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* a solid colour under the light so the top edge is never transparent */
+  background-color: var(--page-bg);
+  background-image:
+    radial-gradient(ellipse 92% 58% at 50% 44%, rgba(96, 104, 132, 0.3) 0%, rgba(52, 57, 74, 0.16) 44%, rgba(16, 17, 20, 0) 76%);
+
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* ---------- chrome ---------- */
+
+#chrome {
+  flex: none;
+  box-sizing: border-box;
+  width: calc(var(--u) * 37);
+  height: max(40px, calc(var(--u) * 4.4));
+  margin-bottom: calc(var(--u) * 1);
+  padding: 0 calc(var(--u) * 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chip {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: none;
+  height: 40px;
+  min-width: 44px;
+  margin: 0;
+  padding: 0 14px 0 12px;
+  border: 0;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ui-ink-dim);
+  font: 16px/1 var(--font-pixel);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.045));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transform: translateZ(0);
+  transition: transform 200ms var(--ease-spring-soft);
+}
+
+/* extends the hit area to 48pt without growing the pill */
+.chip::after {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
+}
+
+/* The haptic label js/haptics.js appends is the last child, but ::after still comes after
+   it and would take every tap, so the label never got the finger and the chips never
+   ticked. Lift the label above it and give it the same extended area. (!important: the
+   label carries inset: 0 inline. The chip's transform keeps the z-index local.) */
+.chip > [data-haptic-trigger] {
+  z-index: 1;
+  inset: -6px -4px !important;
+}
+
+.chip svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  shape-rendering: crispEdges;
+}
+
+.chip:active {
+  transform: scale(0.95);
+  transition: transform var(--t-press) var(--ease-out);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--ui-yolk);
+  outline-offset: 3px;
+}
+
+#brand {
+  font: 16px/1 var(--font-pixel);
+  letter-spacing: 0.34em;
+  padding-left: 0.34em;            /* optically re-centres the tracked word */
+  color: var(--ui-ink-faint);
+}
+
+/* ---------- device ---------- */
+
+#device {
+  /* colourway tokens; every [data-skin] block below redefines the same set */
+  --shell: #F3EFE4;
+  --shell-shade: #CFC8B6;
+  --shell-hi: #FFFFFF;
+  --key: #FFC83D;
+  --key-glyph: #2B2B2E;
+  --accent: #D93F1C;
+  --accent-glyph: #FFF4E6;
+  --bezel: #2B2B2E;
+  --wordmark: rgba(84, 72, 48, 0.5);
+
+  /* supporting tokens (also per skin) */
+  --shell-paint: var(--shell);                 /* body fill; a gradient on the translucent skins */
+  --hi-mix: 78%;                               /* strength of the top-left light on the body */
+  --edge-hi: rgba(255, 255, 255, 0.96);        /* the crisp top specular edge */
+  --edge-soft: rgba(255, 255, 255, 0.55);
+  --rim: rgba(255, 255, 255, 0.14);            /* hairline that separates the shell from the page */
+  --sheen: 0.5;                                /* opacity of the moving highlight */
+  --well: rgba(88, 78, 58, 0.34);              /* recess under each key */
+  --lip: rgba(255, 255, 255, 0.75);            /* light catching the lower lip of a recess */
+  --label: rgba(72, 62, 42, 0.74);
+  --deboss: 0 1px 0 rgba(255, 255, 255, 0.8);
+  --halo: rgba(255, 233, 186, 0.17);
+  --see: 0;                                    /* how much of the internals shows through */
+  --texture: none;
+
+  --r-top: calc(var(--u) * 7);
+  --r-bottom: calc(var(--u) * 12.5);
+  --shape: var(--r-top) var(--r-top) var(--r-bottom) var(--r-bottom) / var(--r-top) var(--r-top) calc(var(--u) * 13.5) calc(var(--u) * 13.5);
+
+  position: relative;
+  isolation: isolate;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  width: calc(var(--u) * 37);
+  min-height: 0;
+  max-height: calc(var(--u) * 68);
+  margin-block: auto;                          /* centres the capsule when the screen is taller */
+  padding: calc(var(--u) * 2.4) 0 calc(var(--u) * 5.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* coloured light on the page behind the toy; this is what lifts dark shells off the dark page */
+.halo {
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  top: 48%;
+  width: 190%;
+  height: 128%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, var(--halo), transparent);
+  pointer-events: none;
+}
+
+.shell {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  border-radius: var(--shape);
+  background: var(--shell-paint);
+  box-shadow:
+    0 0 0 1px var(--rim),
+    0 calc(var(--u) * 0.3) calc(var(--u) * 0.6) rgba(0, 0, 0, 0.4),
+    0 calc(var(--u) * 2.8) calc(var(--u) * 5.6) calc(var(--u) * -1.4) rgba(0, 0, 0, 0.72);
+  pointer-events: none;
+}
+
+/* the big soft highlight; js nudges it a few px with the pointer */
+.sheen {
+  position: absolute;
+  left: -24%;
+  top: -16%;
+  width: 104%;
+  height: 52%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0));
+  opacity: var(--sheen);
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+
+/* All surface light lives on one layer above the internals: the body gradient, the crisp
+   specular edge along the top, the soft roll-off inside it and the underside shade. */
+.gloss {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    var(--texture),
+    radial-gradient(118% 62% at 24% -4%, color-mix(in srgb, var(--shell-hi) var(--hi-mix), transparent), transparent 64%),
+    linear-gradient(172deg, transparent 44%, color-mix(in srgb, var(--shell-shade) 86%, transparent) 122%);
+  box-shadow:
+    inset 0 1.5px 0 var(--edge-hi),
+    inset 0 calc(var(--u) * 0.7) calc(var(--u) * 1) calc(var(--u) * -0.5) var(--edge-soft),
+    inset calc(var(--u) * 0.6) 0 calc(var(--u) * 0.9) calc(var(--u) * -0.6) var(--edge-soft),
+    inset calc(var(--u) * -0.7) 0 calc(var(--u) * 1.2) calc(var(--u) * -0.6) var(--shell-shade),
+    inset 0 calc(var(--u) * -1.8) calc(var(--u) * 2.6) calc(var(--u) * -1.1) var(--shell-shade),
+    inset 0 -1.5px 0 rgba(0, 0, 0, 0.16);
+}
+
+/* ---------- internals (translucent skins only) ---------- */
+
+.internals {
+  position: absolute;
+  inset: 0;
+  display: none;
+  opacity: var(--see);
+}
+
+.chassis {
+  position: absolute;
+  inset: calc(var(--u) * 1.3);
+  border-radius:
+    calc(var(--u) * 5.8) calc(var(--u) * 5.8) calc(var(--u) * 11.3) calc(var(--u) * 11.3) /
+    calc(var(--u) * 5.8) calc(var(--u) * 5.8) calc(var(--u) * 12.3) calc(var(--u) * 12.3);
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px calc(var(--u) * 0.8)),
+    linear-gradient(170deg, #3A3E46, #2A2D33 42%, #1C1E23);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+/* Bottom-anchored on purpose: the keys are laid out from the bottom of the shell too, so the
+   contact rings stay under them at every device height. */
+.innards {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: calc(var(--u) * 30);
+  overflow: visible;
+}
+
+.innards text {
+  font: 7px ui-monospace, 'SF Mono', Menlo, monospace;
+  letter-spacing: 0.08em;
+  fill: rgba(255, 255, 255, 0.5);
+}
+
+/* ---------- LCD plate ---------- */
+
+/* The box lcd.js measures to choose its dot pitch (floor(width / 50)). Its width must not
+   depend on the canvas, which is why the plate overflows it instead of sizing it.
+   31.3u gives 6 px dots from 375 pt upwards and 7 px on the 440 pt phones. */
+.lcd-fit {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  width: calc(var(--u) * 31.3);
+  display: flex;
+  justify-content: center;
+}
+
+/* one sheet of smoked glass holding the dot matrix and the caption line */
+.plate {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  /* room for an 18-character caption even when the pitch drops and the LCD gets narrower */
+  min-width: min(calc(288px + var(--u) * 2.4), calc(var(--u) * 35));
+  padding: calc(var(--u) * 1.2) calc(var(--u) * 1.2) 0;
+  border-radius: calc(var(--u) * 2.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bezel) 82%, #fff) 0%, var(--bezel) 16%, color-mix(in srgb, var(--bezel) 80%, #000) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(0, 0, 0, 0.34),
+    0 -1px 1px rgba(0, 0, 0, 0.22),
+    0 1.5px 0 var(--lip);
+}
+
+/* a faint reflection across the whole pane; static, the moving glare is on #glass */
+.plate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(118deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 26%, transparent 42%);
+  pointer-events: none;
+}
+
+#bezel {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  border-radius: calc(var(--u) * 1.2);
+  line-height: 0;
+  /* the LCD sits a little below the pane: dark gasket, then light on the lower lip */
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.55),
+    0 3px 0 0 rgba(255, 255, 255, 0.07);
+}
+
+#lcd {
+  display: block;
+  /* lcd.js sets the real size; this is only the box before the first measure */
+  width: calc(var(--u) * 30);
+  height: calc(var(--u) * 30);
+  touch-action: none;
+}
+
+#glass {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;             /* taps go through to the canvas */
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.38),
+    inset 0 0 24px rgba(0, 0, 0, 0.13),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.glare {
+  position: absolute;
+  inset: -14%;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.07) 23%, rgba(255, 255, 255, 0) 39%),
+    linear-gradient(296deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 20%);
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+
+/* night light: the panel is lit from inside, so reflections dim and the pane glows a little */
+#lcd[data-tint='glow'] + #glass {
+  box-shadow:
+    inset 0 2px 8px rgba(0, 0, 0, 0.6),
+    inset 0 0 28px rgba(0, 0, 0, 0.35);
+}
+
+#lcd[data-tint='glow'] + #glass .glare {
+  opacity: 0.45;
+}
+
+#caption {
+  box-sizing: border-box;
+  width: 100%;
+  height: calc(var(--u) * 3.6);
+  min-height: 22px;
+  margin: 0;
+  padding: 0 calc(var(--u) * 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 16px/1 var(--font-pixel);
+  color: #DCE2CE;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- badge row: wordmark and speaker ---------- */
+
+.badge {
+  position: relative;
+  z-index: 2;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  width: calc(var(--u) * 28.4);
+  min-height: calc(var(--u) * 4.4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 16px/1 var(--font-pixel);
+  letter-spacing: 0.16em;
+  color: var(--wordmark);
+  text-shadow: var(--deboss);
+}
+
+.led {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--accent) 50%, #fff), var(--accent) 58%, color-mix(in srgb, var(--accent) 70%, #000));
+  box-shadow:
+    0 0 0 1.5px rgba(0, 0, 0, 0.22),
+    0 1px 0 1.5px var(--lip),
+    0 0 6px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* seven drilled holes in a flower */
+.speaker {
+  position: relative;
+  z-index: 0;
+  flex: none;
+  width: calc(var(--u) * 2.9);
+  height: calc(var(--u) * 2.9);
+}
+
+.speaker i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--u) * 0.52);
+  height: calc(var(--u) * 0.52);
+  margin: calc(var(--u) * -0.26);
+  border-radius: 50%;
+  background: rgba(8, 8, 10, 0.72);
+  box-shadow:
+    inset 0 1px 1px rgba(0, 0, 0, 0.7),
+    0 1px 0 var(--lip);
+}
+
+.speaker i:nth-child(2) { transform: translate(calc(var(--u) * 1.04), 0); }
+.speaker i:nth-child(3) { transform: translate(calc(var(--u) * 0.52), calc(var(--u) * 0.9)); }
+.speaker i:nth-child(4) { transform: translate(calc(var(--u) * -0.52), calc(var(--u) * 0.9)); }
+.speaker i:nth-child(5) { transform: translate(calc(var(--u) * -1.04), 0); }
+.speaker i:nth-child(6) { transform: translate(calc(var(--u) * -0.52), calc(var(--u) * -0.9)); }
+.speaker i:nth-child(7) { transform: translate(calc(var(--u) * 0.52), calc(var(--u) * -0.9)); }
+
+/* the buzzer disc seen behind the holes on the translucent skins */
+.speaker .piezo {
+  display: none;
+  z-index: -1;
+  width: calc(var(--u) * 5.4);
+  height: calc(var(--u) * 5.4);
+  margin: calc(var(--u) * -2.7);
+  transform: none;
+  opacity: var(--see);
+  background: radial-gradient(circle, #E4E7EC 0 30%, #9AA0AA 31% 33%, #D9A050 34% 64%, #9C6A22 65% 68%, #C98A3A 69% 100%);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- keys ---------- */
+
+#keys {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  width: calc(var(--u) * 27.4);
+  height: calc(var(--u) * 10.4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+/* .key is only the hit box. It must stay position: relative and unclipped because
+   js/haptics.js appends a full-size <label> overlay inside it; all movement happens on
+   .key-cap so the hit box itself never shifts under the finger. */
+.key {
+  --cap: var(--key);
+  --cap-glyph: var(--key-glyph);
+  --size: calc(var(--u) * 7.2);
+  position: relative;
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  outline: none;
+  cursor: pointer;
+  touch-action: none;
+}
+
+#keyB {
+  --cap: var(--accent);
+  --cap-glyph: var(--accent-glyph);
+  --size: calc(var(--u) * 8.2);
+  margin-top: calc(var(--u) * 2.2);            /* the shallow arc */
+}
+
+.key-well,
+.key-shadow,
+.key-wall,
+.key-cap {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.key-well {
+  inset: calc(var(--u) * -0.55);
+  background: var(--well);
+  box-shadow:
+    inset 0 calc(var(--u) * 0.2) calc(var(--u) * 0.45) rgba(0, 0, 0, 0.42),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    0 1.5px 0 var(--lip);
+}
+
+/* contact shadow on the floor of the well; fades when the cap comes down */
+.key-shadow {
+  inset: calc(var(--u) * 0.2) calc(var(--u) * 0.15) calc(var(--u) * -0.5);
+  background: rgba(0, 0, 0, 0.5);
+  filter: blur(calc(var(--u) * 0.38));
+  transition: opacity var(--t-release) var(--ease-out), transform var(--t-release) var(--ease-spring);
+}
+
+/* the side of the cap: it stays put, so the cap sliding down over it shows the travel */
+.key-wall {
+  transform: translate3d(0, calc(var(--u) * 0.44), 0);
+  background: var(--cap);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cap) 72%, #000), color-mix(in srgb, var(--cap) 52%, #000));
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.key-cap {
+  display: grid;
+  place-items: center;
+  background: var(--cap);
+  background:
+    radial-gradient(84% 60% at 50% 112%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(120% 120% at 30% 14%, color-mix(in srgb, var(--cap) 58%, #fff) 0%, var(--cap) 44%, color-mix(in srgb, var(--cap) 84%, #000) 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.72),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 calc(var(--u) * -0.3) calc(var(--u) * 0.5) rgba(0, 0, 0, 0.16);
+  transform: translate3d(0, 0, 0);
+  transition: transform var(--t-release) var(--ease-spring);
+  will-change: transform;
+}
+
+.key-cap svg {
+  width: 15px;
+  height: 21px;
+  fill: var(--cap-glyph);
+  opacity: 0.86;
+  shape-rendering: crispEdges;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.3));
+}
+
+.key-label {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + var(--u) * 1.15);
+  transform: translateX(-50%);
+  font: 16px/1 var(--font-pixel);
+  white-space: nowrap;
+  color: var(--label);
+  text-shadow: var(--deboss);
+  pointer-events: none;
+}
+
+/* Pressed look. index.html toggles .is-pressed on pointerdown, so the cap is down within
+   the same frame as the touch; scenes may toggle it too for keyboard presses. */
+.key.is-pressed .key-cap {
+  transform: translate3d(0, calc(var(--u) * 0.26), 0) scale(0.97);
+  transition: transform var(--t-press) var(--ease-out);
+}
+
+.key.is-pressed .key-shadow {
+  opacity: 0.25;
+  transform: translate3d(0, calc(var(--u) * -0.3), 0) scale(0.94);
+  transition: opacity var(--t-press) var(--ease-out), transform var(--t-press) var(--ease-out);
+}
+
+.key:focus-visible .key-well {
+  outline: 3px solid var(--ui-yolk);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover {
+    color: var(--ui-ink);
+  }
+
+  .key:not(.is-pressed):hover .key-cap {
+    transform: translate3d(0, calc(var(--u) * -0.08), 0);
+  }
+}
+
+/* short refusal shake for scenes: add .shake to #device, remove it on animationend */
+#device.shake {
+  animation: device-shake 240ms var(--ease-out) both;
+}
+
+@keyframes device-shake {
+  0% { transform: translate3d(0, 0, 0); }
+  20% { transform: translate3d(calc(var(--u) * -0.5), 0, 0); }
+  45% { transform: translate3d(calc(var(--u) * 0.4), 0, 0); }
+  70% { transform: translate3d(calc(var(--u) * -0.2), 0, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+/* ---------- colourways ---------- */
+
+#device[data-skin='milk'] {
+  --shell: #F3EFE4;
+  --shell-shade: #CFC8B6;
+  --shell-hi: #FFFFFF;
+  --key: #FFC83D;
+  --key-glyph: #2B2B2E;
+  --accent: #D93F1C;
+  --accent-glyph: #FFF4E6;
+  --bezel: #2B2B2E;
+  --wordmark: rgba(84, 72, 48, 0.5);
+}
+
+#device[data-skin='graphite'] {
+  --shell: #1B1C1F;
+  --shell-shade: #0B0C0E;
+  --shell-hi: #5A5E68;
+  --key: #E9E9EC;
+  --key-glyph: #1B1C1F;
+  --accent: #FF4B3A;
+  --accent-glyph: #FFFFFF;
+  --bezel: #0A0B0C;
+  --wordmark: rgba(255, 255, 255, 0.34);
+
+  --shell-paint: linear-gradient(176deg, #26282C, #1B1C1F 38%, #121316);
+  --hi-mix: 46%;
+  --edge-hi: rgba(255, 255, 255, 0.42);
+  --edge-soft: rgba(255, 255, 255, 0.1);
+  --rim: rgba(150, 158, 178, 0.42);
+  --sheen: 0.09;
+  --well: rgba(0, 0, 0, 0.6);
+  --lip: rgba(255, 255, 255, 0.2);
+  --label: rgba(255, 255, 255, 0.56);
+  --deboss: 0 -1px 0 rgba(0, 0, 0, 0.7);
+  --halo: rgba(150, 170, 220, 0.3);
+  /* "Graphite Dot": a fine drilled-dot finish */
+  --texture: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.07) 0 0.7px, transparent 1.2px) 0 0 / 7px 7px;
+}
+
+#device[data-skin='grape'] {
+  --shell: #6A48F0;
+  --shell-shade: #3F27B8;
+  --shell-hi: #C9BBFF;
+  --key: #FFD23F;
+  --key-glyph: #2B1C6B;
+  --accent: #FF7AB8;
+  --accent-glyph: #4A0F33;
+  --bezel: #1E1838;
+  --wordmark: rgba(255, 255, 255, 0.7);
+
+  --shell-paint: linear-gradient(168deg, #8062FA 0%, #6A48F0 34%, #4B30CC 78%, #3F27B8 100%);
+  --hi-mix: 52%;
+  --edge-hi: rgba(255, 255, 255, 0.82);
+  --edge-soft: rgba(214, 203, 255, 0.5);
+  --rim: rgba(201, 187, 255, 0.4);
+  --sheen: 0.26;
+  --well: rgba(22, 8, 78, 0.5);
+  --lip: rgba(214, 203, 255, 0.4);
+  --label: rgba(255, 255, 255, 0.84);
+  --deboss: 0 1px 0 rgba(30, 14, 100, 0.55);
+  --halo: rgba(122, 92, 255, 0.34);
+  --see: 0.44;
+}
+
+#device[data-skin='ice'] {
+  --shell: #8E99A6;
+  --shell-shade: #2A2D33;
+  --shell-hi: #FFFFFF;
+  --key: #F5F5F7;
+  --key-glyph: #2A2D33;
+  --accent: #FF8A3D;
+  --accent-glyph: #3A1A02;
+  --bezel: #16181B;
+  --wordmark: rgba(255, 255, 255, 0.78);
+
+  --shell-paint: linear-gradient(170deg, #D3DEE9 0%, #9DADBD 28%, #66737F 70%, #48525C 100%);
+  --hi-mix: 34%;
+  --edge-hi: rgba(255, 255, 255, 0.85);
+  --edge-soft: rgba(255, 255, 255, 0.5);
+  --rim: rgba(255, 255, 255, 0.3);
+  --sheen: 0.2;
+  --well: rgba(0, 0, 0, 0.46);
+  --lip: rgba(255, 255, 255, 0.34);
+  --label: rgba(255, 255, 255, 0.9);
+  --deboss: 0 1px 2px rgba(0, 0, 0, 0.6);
+  --halo: rgba(170, 214, 255, 0.26);
+  --see: 0.9;
+}
+
+#device[data-skin='lagoon'] {
+  --shell: #0B7F86;
+  --shell-shade: #075A60;
+  --shell-hi: #9DEBE4;
+  --key: #FFE9A8;
+  --key-glyph: #073B40;
+  --accent: #FF7A59;
+  --accent-glyph: #4A1206;
+  --bezel: #062A2E;
+  --wordmark: rgba(255, 255, 255, 0.7);
+
+  --shell-paint: linear-gradient(168deg, #1BA9AE 0%, #0B7F86 36%, #086A70 78%, #075A60 100%);
+  --hi-mix: 50%;
+  --edge-hi: rgba(255, 255, 255, 0.8);
+  --edge-soft: rgba(157, 235, 228, 0.5);
+  --rim: rgba(157, 235, 228, 0.38);
+  --sheen: 0.24;
+  --well: rgba(2, 40, 44, 0.52);
+  --lip: rgba(157, 235, 228, 0.36);
+  --label: rgba(255, 255, 255, 0.86);
+  --deboss: 0 1px 0 rgba(3, 50, 54, 0.6);
+  --halo: rgba(40, 190, 196, 0.3);
+  --see: 0.42;
+}
+
+#device[data-skin='sakura'] {
+  --shell: #E8588A;
+  --shell-shade: #B43863;
+  --shell-hi: #FFD3E0;
+  --key: #FFF4C2;
+  --key-glyph: #5A1230;
+  --accent: #8E2450;
+  --accent-glyph: #FFE9F0;
+  --bezel: #3A1024;
+  --wordmark: rgba(255, 255, 255, 0.78);
+
+  --shell-paint: linear-gradient(168deg, #F686AB 0%, #E8588A 36%, #CC4474 78%, #B43863 100%);
+  --hi-mix: 56%;
+  --edge-hi: rgba(255, 255, 255, 0.86);
+  --edge-soft: rgba(255, 211, 224, 0.55);
+  --rim: rgba(255, 211, 224, 0.42);
+  --sheen: 0.3;
+  --well: rgba(100, 16, 52, 0.42);
+  --lip: rgba(255, 211, 224, 0.44);
+  --label: rgba(255, 255, 255, 0.9);
+  --deboss: 0 1px 0 rgba(120, 24, 62, 0.55);
+  --halo: rgba(255, 110, 160, 0.3);
+  --see: 0.4;
+}
+
+/* translucent skins show their arranged internals … */
+#device[data-skin='grape'] .internals,
+#device[data-skin='ice'] .internals,
+#device[data-skin='lagoon'] .internals,
+#device[data-skin='sakura'] .internals {
+  display: block;
+}
+
+#device[data-skin='grape'] .piezo,
+#device[data-skin='ice'] .piezo,
+#device[data-skin='lagoon'] .piezo,
+#device[data-skin='sakura'] .piezo {
+  display: block;
+}
+
+/* … unless the owner asked for less transparency (Safari cannot tell us about the system
+   setting, so this is an in-app toggle): the same colours as plain opaque plastic. */
+#device[data-solid='true'] .internals,
+#device[data-solid='true'] .piezo {
+  display: none;
+}
+
+#device[data-solid='true'][data-skin='ice'] {
+  --shell: #DDE5EC;
+  --shell-shade: #A9B4C0;
+  --shell-paint: linear-gradient(170deg, #EEF3F7 0%, #DDE5EC 40%, #BCC6D0 100%);
+  --hi-mix: 70%;
+  --sheen: 0.4;
+  --well: rgba(40, 52, 66, 0.3);
+  --lip: rgba(255, 255, 255, 0.7);
+  --label: rgba(38, 46, 58, 0.78);
+  --wordmark: rgba(38, 46, 58, 0.5);
+  --deboss: 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* ---------- toast ---------- */
+
+/* Absolute, not fixed, and never at the very top: iOS samples fixed elements near the top
+   edge for the status-bar colour, and a transparent one can turn the bar white. */
+#toastRoot {
+  position: absolute;
+  z-index: 80;
+  left: 0;
+  right: 0;
+  top: calc(var(--sat) + var(--u) * 7.6);
+  box-sizing: border-box;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+/* any child is a toast; add .is-leaving about 140 ms before removing it */
+#toastRoot > * {
+  box-sizing: border-box;
+  max-width: min(100%, 340px);
+  margin: 0;
+  padding: 11px 16px;
+  border-radius: 14px;
+  font: 16px/1.25 var(--font-pixel);
+  color: var(--ui-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: linear-gradient(180deg, #2E3139, #23262C);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 10px 24px -6px rgba(0, 0, 0, 0.7);
+  animation: toast-in var(--t-in) var(--ease-out) both;
+}
+
+#toastRoot > .is-leaving,
+#toastRoot > .leaving {
+  animation: toast-out var(--t-out) ease-in both;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate3d(0, -10px, 0) scale(0.96); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to { opacity: 0; transform: translate3d(0, -6px, 0) scale(0.98); }
+}
+
+/* ---------- landscape phone ---------- */
+
+/* Orientation cannot be locked on iOS. The toy keeps its portrait proportions and simply
+   gets smaller: the chrome row leaves the column (chips go to the top corners) and the key
+   captions are dropped so the LCD can still hold a 4 px pitch on a 390 pt tall screen. */
+@media (orientation: landscape) and (max-height: 520px) {
+  :root {
+    --u: min(
+      calc((100vw - var(--sal) - var(--sar)) / 39),
+      calc((var(--vh) - var(--sat) - var(--sab)) / 56.4)
+    );
+  }
+
+  #stage {
+    padding-top: calc(var(--sat) + var(--u) * 0.6);
+    padding-bottom: calc(var(--sab) + var(--u) * 0.8);
+  }
+
+  #chrome {
+    position: absolute;
+    top: calc(var(--sat) + 10px);
+    left: calc(var(--sal) + 14px);
+    right: calc(var(--sar) + 14px);
+    width: auto;
+    margin: 0;
+    padding: 0;
+  }
+
+  #brand {
+    display: none;
+  }
+
+  #device {
+    max-height: none;
+    padding: calc(var(--u) * 1.8) 0 calc(var(--u) * 2.6);
+  }
+
+  .lcd-fit {
+    width: calc(var(--u) * 32);
+  }
+
+  .badge {
+    min-height: calc(var(--u) * 3);
+  }
+
+  .key-label {
+    display: none;
+  }
+
+  /* keep the contact rings under the keys now that the bottom padding is 2.8u shorter */
+  .innards {
+    bottom: calc(var(--u) * -2.8);
+  }
+
+  #toastRoot {
+    top: calc(var(--sat) + var(--u) * 3);
+  }
+}
+
+/* ---------- reduced motion ---------- */
+
+/* No springs, no travel, no shake; state changes become a short opacity change.
+   (Glare tracking is switched off in the script, the LCD ghosting in lcd.js.) */
+@media (prefers-reduced-motion: reduce) {
+  .chip,
+  .chip:active,
+  .key-cap,
+  .key.is-pressed .key-cap,
+  .key-shadow,
+  .key.is-pressed .key-shadow {
+    transition: opacity 120ms linear;
+    transform: none;
+  }
+
+  .chip:active,
+  .key.is-pressed .key-cap {
+    opacity: 0.72;
+  }
+
+  .key:not(.is-pressed):hover .key-cap {
+    transform: none;
+  }
+
+  #device.shake {
+    animation: none;
+  }
+
+  #toastRoot > * {
+    animation: toast-fade 120ms linear both;
+  }
+
+  #toastRoot > .is-leaving,
+  #toastRoot > .leaving {
+    animation: toast-fade 120ms linear reverse both;
+  }
+}
+
+@keyframes toast-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

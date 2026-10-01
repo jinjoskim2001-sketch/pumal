@@ -1,0 +1,1440 @@
+/* 품알 — bottom sheets and what goes in them (js/ui.js builds the markup).
+   The modern half of the toy: calm dark surfaces, the pixel face at 16 / 32 px, the device
+   colour as the one accent. Only transform and opacity are animated; everything else snaps.
+   Every app.css token is read with a literal fallback so a sheet still renders on its own. */
+
+#sheetRoot {
+  --sh-bg: #1A1C21;
+  --sh-card: #25282F;
+  --sh-well: rgba(0, 0, 0, 0.3);
+  --sh-ink: var(--ui-ink, #F1EEE6);
+  --sh-dim: var(--ui-ink-dim, rgba(241, 238, 230, 0.66));
+  --sh-faint: rgba(241, 238, 230, 0.46);
+  --sh-line: var(--ui-line, rgba(255, 255, 255, 0.09));
+  --sh-danger: var(--ui-danger, #FF6B57);
+  --sh-pixel: var(--font-pixel, 'NeoDunggeunmo', ui-rounded, 'Apple SD Gothic Neo', system-ui, sans-serif);
+  --sh-sans: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', system-ui, sans-serif;
+  --sh-ease: var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
+  --sh-drawer: var(--ease-drawer, cubic-bezier(0.32, 0.72, 0, 1));
+  --sh-spring: var(--ease-spring-soft, cubic-bezier(0.3, 1.3, 0.5, 1));
+  --sh-top: max(var(--sat, 0px), 14px);
+  --sh-bottom: var(--sab, 0px);
+
+  /* accent = the colour of the device in the owner's hand (data-skin is set by ui.js) */
+  --acc: #FFC83D;
+  --acc-ink: #2A2008;
+
+  /* written by ui.js while the on-screen keyboard covers the bottom of the page */
+  --kb: 0px;
+  /* Sheet heights are measured from what is visible: --vvh (written by ui.js with the keyboard
+     up), else the page height token --vh from app.css (100dvh in a browser tab, where 100vh
+     is the tall viewport and would put the sheet's top under Safari's bars). */
+
+  position: absolute;
+  inset: 0;
+  z-index: 50;                       /* under the gate (60) and the toasts (80) */
+  color: var(--sh-ink);
+  font: 16px/1.5 var(--sh-pixel);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+/* Nothing open, nothing there: no transparent layer may sit over the page or the status bar. */
+#sheetRoot:empty {
+  display: none;
+}
+
+#sheetRoot[data-skin='grape'] { --acc: #A996FF; --acc-ink: #170A52; }
+/* graphite's own accent is a red too close to the danger colour, so it borrows its key white */
+#sheetRoot[data-skin='graphite'] { --acc: #E9E9EC; --acc-ink: #1B1C1F; --knob-on: #1B1C1F; }
+#sheetRoot[data-skin='ice'] { --acc: #BFE3FA; --acc-ink: #0B2A3D; --knob-on: #0B2A3D; }
+#sheetRoot[data-skin='lagoon'] { --acc: #3FD0CF; --acc-ink: #032C2E; }
+#sheetRoot[data-skin='sakura'] { --acc: #FF8FB3; --acc-ink: #4A0F2A; }
+
+/* Resets are wrapped in :where() so they weigh nothing and any class below can override them. */
+:where(#sheetRoot) *,
+:where(#sheetRoot) *::before,
+:where(#sheetRoot) *::after {
+  box-sizing: border-box;
+}
+
+#sheetRoot [hidden] {
+  display: none !important;
+}
+
+:where(#sheetRoot) :where(p, h2, h3, ul) {
+  margin: 0;
+  padding: 0;
+  font-weight: 400;
+}
+
+:where(#sheetRoot) :where(button, input, textarea) {
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+}
+
+:where(#sheetRoot) :where(button) {
+  cursor: pointer;
+}
+
+#sheetRoot :focus {
+  outline: none;
+}
+
+#sheetRoot :focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+#sheetRoot .sheet:focus-visible {
+  outline: none;                     /* the panel takes focus only so the keyboard starts inside it */
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.glyph {
+  flex: none;
+  display: block;
+  fill: currentColor;
+  shape-rendering: crispEdges;
+}
+
+/* ---------- layer, dim, panel ---------- */
+
+.sheet-layer {
+  position: absolute;
+  inset: 0;
+  touch-action: none;                /* the dim is not a place to pinch or double-tap zoom */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.sheet-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 6, 9, 0.64);
+  opacity: 0;
+  transition: opacity 260ms var(--sh-ease);
+}
+
+.sheet-layer.is-open > .sheet-dim {
+  opacity: 1;
+}
+
+.sheet {
+  position: relative;
+  flex: none;
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(var(--vvh, var(--vh, 100vh)) - var(--sh-top) - 30px);
+  margin-bottom: var(--kb);
+  display: flex;
+  flex-direction: column;
+  border-radius: 28px 28px 0 0;
+  background: var(--sh-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 -1px 0 rgba(0, 0, 0, 0.6),
+    0 -18px 44px -12px rgba(0, 0, 0, 0.7);
+  /* parked just below the screen; slides from the edge it belongs to */
+  transform: translate3d(0, calc(100% + 48px), 0);
+  transform-origin: 50% 100%;
+  transition: transform 300ms var(--sh-drawer);
+  will-change: transform;
+}
+
+/* More sheet below the fold, so pulling it up past its resting place never shows a gap. */
+.sheet::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% - 1px);
+  height: 100vh;
+  background: var(--sh-bg);
+  pointer-events: none;
+}
+
+.sheet-layer.is-tall > .sheet {
+  height: calc(var(--vvh, var(--vh, 100vh)) - var(--sh-top) - 30px);
+}
+
+.sheet-layer.is-open > .sheet {
+  transform: translate3d(0, 0, 0);
+  transition: transform 420ms var(--sh-drawer);
+}
+
+/* a sheet with another one stacked on it steps back, anchored to the bottom edge */
+.sheet-layer.is-open.is-under > .sheet {
+  transform: translate3d(0, 0, 0) scale(0.955);
+}
+
+.sheet-layer.is-closing {
+  pointer-events: none;              /* a sheet on its way out must not eat the next tap */
+}
+
+/* under the finger nothing eases; the selector has to outweigh the .is-open transition */
+.sheet-layer.is-open > .sheet.is-dragging,
+.sheet-layer.is-dragging > .sheet-dim {
+  transition: none;
+}
+
+/* ---------- head ---------- */
+
+/* The whole head is the drag handle (pointer capture in ui.js), hence touch-action: none. */
+.sheet-head {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  padding-top: 16px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.sheet-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--sh-line);
+  opacity: 0;
+  transition: opacity 140ms linear;
+}
+
+.sheet.is-scrolled > .sheet-head::after {
+  opacity: 1;
+}
+
+/* grab handle spelled in LCD dots */
+.sheet-grab {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  display: flex;
+  gap: 2px;
+  transform: translateX(-50%);
+}
+
+.sheet-grab i {
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: rgba(241, 238, 230, 0.26);
+}
+
+.sheet-bar {
+  position: relative;
+  min-height: 52px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sheet-title {
+  max-width: calc(100% - 150px);
+  font: 16px/1.25 var(--sh-pixel);
+  text-align: center;
+  color: var(--sh-ink);
+}
+
+.sheet-close {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  font: 16px/1 var(--sh-pixel);
+  color: var(--sh-dim);
+  transform: translateY(-50%);
+  transition: opacity 120ms linear;
+}
+
+.sheet-close:active {
+  opacity: 0.5;
+}
+
+.sheet-bar.has-seg .seg {
+  width: min(200px, calc(100% - 150px));
+}
+
+/* ---------- body, foot ---------- */
+
+.sheet-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 4px 16px calc(var(--sh-bottom) + 28px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: none;
+}
+
+.sheet-body::-webkit-scrollbar {
+  display: none;
+}
+
+.sheet:has(> .sheet-foot:not([hidden])) > .sheet-body {
+  padding-bottom: 8px;
+}
+
+.sheet-body.is-swapped > * {
+  animation: sheet-page-in 180ms var(--sh-ease) both;
+}
+
+@keyframes sheet-page-in {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.sheet-foot {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  padding: 12px 16px calc(max(var(--sh-bottom), 10px) + 12px);
+  display: flex;
+  gap: 10px;
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: 16px/1.2 var(--sh-pixel);
+  white-space: nowrap;
+  transform: translateZ(0);
+  transition: transform 220ms var(--sh-spring);
+}
+
+/* the 3 px lip under every button is the toy's key travel, in miniature */
+.btn-primary {
+  background: var(--acc);
+  color: var(--acc-ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -3px 0 rgba(0, 0, 0, 0.2);
+}
+
+.btn-quiet {
+  background: #30333B;
+  color: var(--sh-ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -3px 0 rgba(0, 0, 0, 0.26);
+}
+
+.btn-danger {
+  background: var(--sh-danger);
+  color: #2C0803;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -3px 0 rgba(0, 0, 0, 0.2);
+}
+
+.btn:active {
+  transform: translate3d(0, 1px, 0) scale(0.97);
+  transition: transform 90ms var(--sh-ease);
+}
+
+/* ---------- small text ---------- */
+
+.lead {
+  font: 16px/1.5 var(--sh-pixel);
+  color: var(--sh-ink);
+  white-space: pre-line;
+}
+
+.note {
+  font: 13px/1.45 var(--sh-sans);
+  color: var(--sh-dim);
+}
+
+.note.center {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.group-title {
+  margin: 0 4px 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font: 16px/1.25 var(--sh-pixel);
+  color: var(--sh-faint);
+}
+
+.group-count {
+  color: var(--sh-faint);
+}
+
+.tag {
+  flex: none;
+  padding: 1px 7px 2px;
+  border-radius: 7px;
+  background: var(--acc);
+  color: var(--acc-ink);
+  font: 16px/1.25 var(--sh-pixel);
+}
+
+.tag-quiet {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--sh-dim);
+}
+
+/* ---------- pixel portrait ---------- */
+
+/* canvases are drawn by ui.js with the LCD look; this is the bezel and the glass over them */
+.pt {
+  position: relative;
+  flex: none;
+  display: block;
+  width: var(--pt, 72px);
+  height: var(--pt, 72px);
+  margin: 4px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #C5CFA4;
+  box-shadow: 0 0 0 4px #101114, 0 0 0 5px rgba(255, 255, 255, 0.09);
+}
+
+.pt-f {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+}
+
+.pt-f1 {
+  visibility: hidden;
+}
+
+/* the same two-frame idle flip as inside the glass: discrete, never tweened */
+#sheetRoot[data-flip='1'] .pt-live .pt-f0 {
+  visibility: hidden;
+}
+
+#sheetRoot[data-flip='1'] .pt-live .pt-f1 {
+  visibility: visible;
+}
+
+.pt-glass {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(118deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.05) 24%, rgba(255, 255, 255, 0) 40%);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.34), inset 0 0 14px rgba(0, 0, 0, 0.12);
+}
+
+.pt-unknown .pt-glass {
+  background: rgba(16, 17, 20, 0.34);
+}
+
+/* ---------- cards (도감, 앨범) ---------- */
+
+.dex-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding-top: 8px;
+}
+
+.dex-progress {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 2px 4px 0;
+}
+
+.dex-count {
+  flex: none;
+  font: 32px/1 var(--sh-pixel);
+  color: var(--sh-faint);
+  white-space: nowrap;
+}
+
+.dex-count b {
+  font-weight: 400;
+  color: var(--acc);
+}
+
+.dex-progress-side {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.dex-cells {
+  display: grid;
+  grid-template-columns: repeat(14, 1fr);
+  gap: 3px;
+}
+
+.dex-cells i {
+  height: 8px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dex-cells i.on {
+  background: var(--acc);
+}
+
+.cards {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card {
+  position: relative;
+  width: 100%;
+  padding: 8px 14px 8px 8px;
+  border: 0;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--sh-card);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  text-align: left;
+}
+
+.card.is-unknown {
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+}
+
+.card-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 16px/1.375 var(--sh-pixel);
+  color: var(--sh-ink);
+}
+
+.card-line {
+  font: 13px/1.45 var(--sh-sans);
+  color: var(--sh-dim);
+}
+
+.card-meta {
+  font: 13px/1.45 var(--sh-sans);
+  color: var(--sh-faint);
+}
+
+.card-meta.is-star {
+  color: #C9CFF2;
+}
+
+.is-unknown .card-name {
+  color: var(--sh-faint);
+  letter-spacing: 0.1em;
+}
+
+.album-card {
+  transition: transform 220ms var(--sh-spring);
+}
+
+.album-card:active {
+  transform: scale(0.98);
+  transition: transform 90ms var(--sh-ease);
+}
+
+.album-card .glyph {
+  color: var(--sh-faint);
+}
+
+.album-note {
+  margin: 0 4px -12px;
+}
+
+.empty {
+  padding: 40px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.empty .pt {
+  margin-bottom: 12px;
+}
+
+/* ---------- 설정 ---------- */
+
+.set-page {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  padding-top: 8px;
+}
+
+.set-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.set-group > .note {
+  margin: 8px 4px 0;
+}
+
+.set-group > .rows + .group-title,
+.set-group > .swatches + .group-title,
+.set-group > .note + .group-title,
+.set-group > .mode-box + .rows,
+.set-group > .swatches + .rows {
+  margin-top: 22px;
+}
+
+.rows {
+  border-radius: 18px;
+  background: var(--sh-card);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.row {
+  position: relative;
+  width: 100%;
+  min-height: 56px;
+  padding: 9px 16px;
+  border: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  font: 16px/1.375 var(--sh-pixel);
+  color: var(--sh-ink);
+  text-align: left;
+}
+
+.rows > * + .row::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--sh-line);
+}
+
+/* pressed state as an overlay, so nothing but opacity changes */
+.row::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.07);
+  opacity: 0;
+  transition: opacity 200ms linear;
+  pointer-events: none;
+}
+
+button.row:active::after {
+  opacity: 1;
+  transition: none;
+}
+
+.row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.row-sub {
+  font: 13px/1.4 var(--sh-sans);
+  color: var(--sh-dim);
+}
+
+.row-value {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sh-dim);
+}
+
+.row .glyph {
+  color: var(--sh-faint);
+}
+
+.row.is-danger {
+  color: var(--sh-danger);
+}
+
+.row-disclose[aria-expanded='true'] .glyph {
+  transform: rotate(90deg);
+}
+
+/* switch: a chunky key in a slot, squared off like the rest of the toy */
+.switch {
+  position: relative;
+  flex: none;
+  width: 54px;
+  height: 32px;
+  border-radius: 11px;
+  background: #3B3F48;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.switch-on {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--acc);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transition: opacity 160ms var(--sh-ease);
+}
+
+.switch-knob {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: #F4F1E9;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.16), 0 1px 3px rgba(0, 0, 0, 0.5);
+  transform: translate3d(0, 0, 0);
+  transition: transform 240ms var(--sh-spring);
+}
+
+[aria-checked='true'] > .switch > .switch-on {
+  opacity: 1;
+}
+
+[aria-checked='true'] > .switch > .switch-knob {
+  background: var(--knob-on, #F4F1E9);
+  transform: translate3d(22px, 0, 0);
+}
+
+/* segmented control: the thumb slides, the labels stay put */
+.seg {
+  --seg-n: 2;
+  --seg-i: 0;
+  position: relative;
+  height: 44px;
+  padding: 4px;
+  border-radius: 14px;
+  display: grid;
+  grid-template-columns: repeat(var(--seg-n), 1fr);
+  background: var(--sh-well);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.seg-thumb {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  bottom: 4px;
+  width: calc((100% - 8px) / var(--seg-n));
+  border-radius: 10px;
+  background: #3D414B;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -2px 0 rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.4);
+  transform: translate3d(calc(var(--seg-i) * 100%), 0, 0);
+  transition: transform 260ms var(--sh-drawer);
+}
+
+.seg-btn {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: 16px/1 var(--sh-pixel);
+  color: var(--sh-dim);
+}
+
+/* the control is 44 px tall; this gives each label the full height as its target */
+.seg-btn::after {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+
+.seg-btn[aria-checked='true'] {
+  color: var(--sh-ink);
+}
+
+/* swatches: device colours and screen colours */
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.swatch {
+  position: relative;
+  min-height: 98px;
+  padding: 12px 2px 10px;
+  border: 0;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--sh-card);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  font: 16px/1.25 var(--sh-pixel);
+  color: var(--sh-dim);
+  transition: transform 220ms var(--sh-spring);
+}
+
+.swatch:active {
+  transform: scale(0.96);
+  transition: transform 90ms var(--sh-ease);
+}
+
+.swatch[aria-checked='true'] {
+  color: var(--sh-ink);
+  box-shadow: inset 0 0 0 2px var(--acc);
+}
+
+.swatch-name {
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.swatch.is-locked {
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+  color: var(--sh-faint);
+}
+
+/* a thumbnail of the device itself */
+.toy-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 48px;
+}
+
+.toy {
+  position: relative;
+  width: 36px;
+  height: 48px;
+  border-radius: 11px 11px 17px 17px / 11px 11px 18px 18px;
+  background: var(--c-shell);        /* for engines without color-mix() */
+  background: linear-gradient(158deg, color-mix(in srgb, var(--c-shell) 70%, #fff) 0%, var(--c-shell) 46%, var(--c-shade) 118%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 3px 6px rgba(0, 0, 0, 0.45);
+}
+
+.toy-lcd {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  top: 7px;
+  height: 18px;
+  border-radius: 3px;
+  background: #C5CFA4;
+  box-shadow: 0 0 0 2px #1E2025;
+}
+
+.toy-keys {
+  position: absolute;
+  left: 50%;
+  bottom: 7px;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border-radius: 50%;
+  background: var(--c-accent);
+  box-shadow: -10px -3px 0 -0.5px var(--c-key), 10px -3px 0 -0.5px var(--c-key);
+}
+
+.toy-wrap .glyph {
+  position: absolute;
+  display: none;
+  color: var(--sh-ink);
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6));
+}
+
+.is-locked .toy {
+  opacity: 0.3;
+}
+
+.is-locked .toy-wrap .glyph {
+  display: block;
+}
+
+.tint-frame {
+  position: relative;
+  width: calc(100% - 20px);
+  height: 48px;
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: 0 0 0 3px #101114;
+}
+
+/* the canvas is wider than any frame, so the dot grid runs edge to edge; centred by offset
+   because a grid item that overflows is start-aligned */
+.tint-lcd {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  transform: translate(-50%, -50%);
+}
+
+.tint-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(118deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.05) 24%, rgba(255, 255, 255, 0) 40%);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.34), inset 0 0 14px rgba(0, 0, 0, 0.12);
+}
+
+.swatch.tint {
+  min-height: 98px;
+  padding-top: 14px;
+}
+
+/* time fields: 16 px or iOS zooms the page on focus */
+.row-field {
+  cursor: pointer;
+}
+
+.time-input {
+  flex: none;
+  min-width: 116px;
+  height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--sh-well);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.05);
+  font: 16px/44px var(--sh-pixel);
+  color: var(--sh-ink);
+  text-align: center;
+  color-scheme: dark;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.time-input::-webkit-date-and-time-value {
+  margin: 0;
+  text-align: center;
+}
+
+/* 돌봄 방식 */
+.mode-box {
+  padding: 8px;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--sh-card);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.mode-lines {
+  padding: 8px 8px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mode-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  color: var(--sh-faint);
+}
+
+.mode-line b {
+  font: 16px/1.375 var(--sh-pixel);
+}
+
+.mode-line span {
+  font: 13px/1.45 var(--sh-sans);
+}
+
+.mode-lines[data-mode='gentle'] .mode-line[data-mode='gentle'],
+.mode-lines[data-mode='classic'] .mode-line[data-mode='classic'] {
+  color: var(--sh-ink);
+}
+
+.mode-lines[data-mode='gentle'] .mode-line[data-mode='gentle'] b,
+.mode-lines[data-mode='classic'] .mode-line[data-mode='classic'] b {
+  color: var(--acc);
+}
+
+/* save-code panels inside the list */
+.panel {
+  padding: 2px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: sheet-page-in 180ms var(--sh-ease) both;
+}
+
+.panel-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.code-box {
+  width: 100%;
+  height: 92px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  resize: none;
+  background: var(--sh-well);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.05);
+  font: 16px/1.35 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: var(--sh-dim);
+  word-break: break-all;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.code-box::placeholder {
+  font: 16px/1.5 var(--sh-pixel);
+  color: var(--sh-faint);
+  word-break: keep-all;
+}
+
+.field-error {
+  margin: -2px 4px 0;
+  font: 13px/1.45 var(--sh-sans);
+  color: var(--sh-danger);
+}
+
+/* ---------- 확인 ---------- */
+
+.sheet-layer[data-sheet='confirm'] .sheet-bar {
+  min-height: 44px;
+  padding-top: 6px;
+}
+
+.sheet-layer[data-sheet='confirm'] .sheet-title {
+  max-width: 100%;
+}
+
+.confirm-text {
+  padding: 2px 8px 8px;
+  font: 14px/1.5 var(--sh-sans);
+  color: var(--sh-dim);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* the line about this pet or this code, under the general one */
+.confirm-note {
+  color: var(--sh-ink);
+}
+
+/* ---------- 이름 ---------- */
+
+.name-hero {
+  padding: 4px 4px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.field {
+  position: relative;
+  display: block;
+}
+
+/* 32 px: the name is the one thing on this sheet, and six pixel glyphs fit with room to spare */
+.name-input {
+  width: 100%;
+  height: 72px;
+  padding: 0 56px 0 18px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--sh-well);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.05);
+  font: 32px/72px var(--sh-pixel);
+  color: var(--sh-ink);
+  caret-color: var(--acc);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.name-input::placeholder {
+  color: rgba(241, 238, 230, 0.2);
+}
+
+#sheetRoot .name-input:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 0;
+}
+
+.name-count {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  font: 16px/1 var(--sh-pixel);
+  color: var(--sh-faint);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.chips {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.chip-btn {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--sh-card);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+  font: 16px/1 var(--sh-pixel);
+  color: var(--sh-ink);
+  transition: transform 220ms var(--sh-spring);
+}
+
+.chip-btn:active {
+  transform: scale(0.96);
+  transition: transform 90ms var(--sh-ease);
+}
+
+/* keyboard up: every row of height counts, the portrait can go */
+#sheetRoot.has-kb .name-hero {
+  display: none;
+}
+
+/* ---------- 엽서 ---------- */
+
+.postcard {
+  --pc-paper: #EFE9DA;
+  --pc-ink: #2B2B2E;
+  --pc-soft: rgba(43, 43, 46, 0.62);
+  --pc-rule: rgba(43, 43, 46, 0.2);
+  position: relative;
+  margin-top: 4px;
+  padding: 16px 16px 14px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 42%),
+    var(--pc-paper);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 10px 22px -10px rgba(0, 0, 0, 0.8);
+  color: var(--pc-ink);
+}
+
+/* a night-sky card for the ones who became a star */
+.postcard.is-star {
+  --pc-paper: #1F2440;
+  --pc-ink: #EEF0FB;
+  --pc-soft: rgba(238, 240, 251, 0.68);
+  --pc-rule: rgba(238, 240, 251, 0.2);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)) 47% 13% / 2px 2px no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55)) 58% 30% / 2px 2px no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.7)) 39% 24% / 3px 3px no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.5)) 6% 47% / 2px 2px no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.6)) 94% 52% / 2px 2px no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.45)) 66% 9% / 2px 2px no-repeat,
+    linear-gradient(170deg, #2A3160, #1F2440 55%, #171B33);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 10px 22px -10px rgba(0, 0, 0, 0.8);
+}
+
+.postcard-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.postmark {
+  margin: 6px 0 0 2px;
+  display: flex;
+  align-items: center;
+  color: var(--pc-soft);
+  transform: rotate(-7deg);
+  transform-origin: 30% 50%;
+}
+
+.postmark-ring {
+  flex: none;
+  width: 68px;
+  height: 68px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  box-shadow: inset 0 0 0 3px var(--pc-paper), inset 0 0 0 4px currentColor;
+}
+
+.postmark-ring b {
+  font: 16px/1 var(--sh-pixel);
+  font-weight: 400;
+}
+
+.postmark-ring small {
+  font: 16px/1 var(--sh-pixel);
+  opacity: 0.8;
+}
+
+/* cancellation lines running off the ring */
+.postmark-waves {
+  flex: none;
+  width: 44px;
+  height: 30px;
+  margin-left: -2px;
+  background: repeating-linear-gradient(180deg, currentColor 0 2px, transparent 2px 9px);
+  opacity: 0.8;
+}
+
+/* perforated edge: holes punched on an 8 px grid, the middle filled back in */
+.stamp {
+  position: relative;
+  flex: none;
+  padding: 4px;
+  background: radial-gradient(circle at 4px 4px, transparent 2.4px, #FBF8EF 2.9px) -4px -4px / 8px 8px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+}
+
+.stamp::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background: #FBF8EF;
+}
+
+.stamp .pt {
+  box-shadow: none;
+  border-radius: 2px;
+}
+
+.postcard-text {
+  margin-top: 14px;
+  font: 16px/1.625 var(--sh-pixel);
+  color: var(--pc-ink);
+}
+
+.postcard-sign {
+  margin-top: 10px;
+  font: 16px/1.25 var(--sh-pixel);
+  text-align: right;
+  color: var(--pc-ink);
+}
+
+.postcard-facts {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--pc-rule);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+  font: 13px/1.45 var(--sh-sans);
+  color: var(--pc-soft);
+}
+
+/* ---------- 정보 ---------- */
+
+.about {
+  padding: 12px 8px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.about-word {
+  margin-top: 10px;
+  font: 32px/1 var(--sh-pixel);
+  letter-spacing: 0.08em;
+  margin-right: -0.08em;
+}
+
+.about-line {
+  max-width: 19em;
+  margin: 10px 0 6px;
+  font: 16px/1.5 var(--sh-pixel);
+  color: var(--sh-ink);
+  text-wrap: balance;
+}
+
+/* ---------- pointer devices ---------- */
+
+@media (hover: hover) and (pointer: fine) {
+  button.row:hover::after {
+    opacity: 0.5;
+  }
+
+  .sheet-close:hover {
+    color: var(--sh-ink);
+  }
+
+  .seg-btn:hover {
+    color: var(--sh-ink);
+  }
+}
+
+/* ---------- landscape phone ---------- */
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .sheet {
+    max-height: calc(var(--vvh, var(--vh, 100vh)) - var(--sh-top) - 8px);
+  }
+
+  .sheet-layer.is-tall > .sheet {
+    height: calc(var(--vvh, var(--vh, 100vh)) - var(--sh-top) - 8px);
+  }
+
+  /* Keyboard up as well: about 180 px are left, and the name being typed has to stay in view
+     with 확인 under it. The foot is kept on purpose: the keyboard's return key is ignored while
+     a Hangul syllable is still being composed, which is the usual state right after typing. */
+  #sheetRoot.has-kb .sheet {
+    max-height: calc(var(--vvh, var(--vh, 100vh)) - 4px);
+  }
+
+  #sheetRoot.has-kb .sheet-head {
+    padding-top: 4px;
+  }
+
+  #sheetRoot.has-kb .sheet-grab,
+  #sheetRoot.has-kb .chips {
+    display: none;
+  }
+
+  #sheetRoot.has-kb .sheet-bar {
+    min-height: 40px;
+  }
+
+  #sheetRoot.has-kb .name-input {
+    height: 48px;
+    font-size: 24px;
+    line-height: 48px;
+  }
+
+  #sheetRoot.has-kb .sheet-foot {
+    padding: 6px 16px 8px;
+  }
+}
+
+/* ---------- reduced motion ---------- */
+
+/* No travel and no springs: sheets and pages cross-fade in at most 150 ms. A drag still follows
+   the finger (ui.js writes the transform inline); letting go fades the sheet out. */
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet-layer.is-open > .sheet,
+  .sheet-layer.is-open.is-under > .sheet {
+    transform: none;
+    transition: opacity 140ms linear;
+  }
+
+  .sheet {
+    opacity: 0;
+  }
+
+  .sheet-layer.is-open > .sheet {
+    opacity: 1;
+  }
+
+  .sheet-dim {
+    transition: opacity 140ms linear;
+  }
+
+  .btn,
+  .btn:active,
+  .swatch,
+  .swatch:active,
+  .chip-btn,
+  .chip-btn:active,
+  .album-card,
+  .album-card:active {
+    transform: none;
+    transition: opacity 120ms linear;
+  }
+
+  .btn:active,
+  .swatch:active,
+  .chip-btn:active,
+  .album-card:active {
+    opacity: 0.7;
+  }
+
+  .switch-knob,
+  .seg-thumb {
+    transition: none;
+  }
+
+  .sheet-body.is-swapped > *,
+  .panel {
+    animation: sheet-fade 120ms linear both;
+  }
+}
+
+@keyframes sheet-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
